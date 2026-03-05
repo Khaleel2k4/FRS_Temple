@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/golden_gradient_button.dart';
 import '../widgets/temple_immersive_background.dart';
-import 'admin_dashboard_screen.dart';
+import 'temple_admin_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -97,7 +97,8 @@ class _LoginScreenState extends State<LoginScreen>
     final password = _passwordController.text;
 
     if (email == _validEmail && password == _validPassword) {
-      Navigator.of(context).pushReplacement(_divineRoute(const AdminDashboardScreen()));
+      Navigator.of(context)
+          .pushReplacement(_divineRoute(const TempleAdminHomeScreen()));
       return;
     }
 

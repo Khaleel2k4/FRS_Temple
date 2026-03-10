@@ -42,12 +42,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
     _bar = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1000),
     );
 
     _line = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1200),
     );
 
     _enter.forward();
@@ -75,36 +75,28 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     final firstDate = DateTime(now.year - 5, 1, 1);
     final lastDate = DateTime(now.year + 1, 12, 31);
 
-    DateTime? picked;
-    switch (_filter) {
-      case _TimeFilter.daily:
-      case _TimeFilter.weekly:
-      case _TimeFilter.monthly:
-      case _TimeFilter.yearly:
-        picked = await showDatePicker(
-          context: context,
-          initialDate: _anchor,
-          firstDate: firstDate,
-          lastDate: lastDate,
-          helpText: _filter == _TimeFilter.daily
-              ? 'Select Date'
-              : _filter == _TimeFilter.weekly
-                  ? 'Select Week'
-                  : _filter == _TimeFilter.monthly
-                      ? 'Select Month'
-                      : 'Select Year',
-        );
-        break;
-    }
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _anchor,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      helpText: _filter == _TimeFilter.daily
+          ? 'Select Date'
+          : _filter == _TimeFilter.weekly
+              ? 'Select Week'
+              : _filter == _TimeFilter.monthly
+                  ? 'Select Month'
+                  : 'Select Year',
+    );
 
     if (!mounted) return;
     if (picked == null) return;
 
     final normalized = switch (_filter) {
-      _TimeFilter.daily => DateTime(picked!.year, picked.month, picked.day),
-      _TimeFilter.weekly => _startOfWeek(picked!),
-      _TimeFilter.monthly => DateTime(picked!.year, picked.month, 1),
-      _TimeFilter.yearly => DateTime(picked!.year, 1, 1),
+      _TimeFilter.daily => DateTime(picked.year, picked.month, picked.day),
+      _TimeFilter.weekly => _startOfWeek(picked),
+      _TimeFilter.monthly => DateTime(picked.year, picked.month, 1),
+      _TimeFilter.yearly => DateTime(picked.year, 1, 1),
     };
 
     setState(() => _anchor = normalized);
@@ -135,11 +127,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     const SizedBox(height: 12),
                     _TimeFilterBar(value: _filter, onChanged: _setFilter),
                     const SizedBox(height: 10),
-                    _RangeSelector(
-                      filter: _filter,
-                      anchor: _anchor,
-                      onTap: _pickRange,
-                    ),
+                    _RangeSelector(filter: _filter, anchor: _anchor, onTap: _pickRange),
                     const SizedBox(height: 12),
                     _StatsGrid(data: _data.statsFor(_filter)),
                     const SizedBox(height: 14),
@@ -330,6 +318,125 @@ class AnalyticsStats {
 
 enum _TimeFilter { daily, weekly, monthly, yearly }
 
+class _AnalyticsHeader extends StatelessWidget {
+  const _AnalyticsHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: AppTheme.templeBrown.withOpacity(0.92),
+          letterSpacing: 0.1,
+        );
+    final subStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w500,
+          color: AppTheme.templeBrown.withOpacity(0.62),
+          letterSpacing: 0.05,
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Devotee Analytics', style: titleStyle),
+        const SizedBox(height: 4),
+        Text('Temple Visitor Statistics', style: subStyle),
+      ],
+    );
+  }
+}
+
+class _TimeFilterBar extends StatelessWidget {
+  const _TimeFilterBar({required this.value, required this.onChanged});
+
+  final _TimeFilter value;
+  final ValueChanged<_TimeFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const items = <_TimeFilter, String>{
+      _TimeFilter.daily: 'Daily',
+      _TimeFilter.weekly: 'Weekly',
+      _TimeFilter.monthly: 'Monthly',
+      _TimeFilter.yearly: 'Yearly',
+    };
+
+    final keys = items.keys.toList(growable: false);
+    final labels = items.values.toList(growable: false);
+    final selectedIndex = keys.indexOf(value).clamp(0, keys.length - 1);
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final w = c.maxWidth;
+        final segW = w / keys.length;
+        return Container(
+          height: 44,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8E7),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE6D7B5), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 14,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutCubic,
+                left: segW * selectedIndex,
+                top: 4,
+                bottom: 4,
+                width: segW,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFD27D).withOpacity(0.42),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  for (var i = 0; i < keys.length; i++)
+                    Expanded(
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => onChanged(keys[i]),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Center(
+                            child: AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOutCubic,
+                              style: TextStyle(
+                                color: i == selectedIndex
+                                    ? AppTheme.templeBrown.withOpacity(0.90)
+                                    : AppTheme.templeBrown.withOpacity(0.55),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                              child: Text(labels[i]),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _RangeSelector extends StatelessWidget {
   const _RangeSelector({
     required this.filter,
@@ -470,125 +577,6 @@ String _monthName(int month) {
   return names[(month - 1).clamp(0, 11)];
 }
 
-class _AnalyticsHeader extends StatelessWidget {
-  const _AnalyticsHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: AppTheme.templeBrown.withOpacity(0.92),
-          letterSpacing: 0.1,
-        );
-    final subStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w500,
-          color: AppTheme.templeBrown.withOpacity(0.62),
-          letterSpacing: 0.05,
-        );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Devotee Analytics', style: titleStyle),
-        const SizedBox(height: 4),
-        Text('Temple Visitor Statistics', style: subStyle),
-      ],
-    );
-  }
-}
-
-class _TimeFilterBar extends StatelessWidget {
-  const _TimeFilterBar({required this.value, required this.onChanged});
-
-  final _TimeFilter value;
-  final ValueChanged<_TimeFilter> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    const items = <_TimeFilter, String>{
-      _TimeFilter.daily: 'Daily',
-      _TimeFilter.weekly: 'Weekly',
-      _TimeFilter.monthly: 'Monthly',
-      _TimeFilter.yearly: 'Yearly',
-    };
-
-    final keys = items.keys.toList(growable: false);
-    final labels = items.values.toList(growable: false);
-    final selectedIndex = keys.indexOf(value).clamp(0, keys.length - 1);
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final w = c.maxWidth;
-        final segW = w / keys.length;
-        return Container(
-          height: 44,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF8E7),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE6D7B5), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeOutCubic,
-                left: segW * selectedIndex,
-                top: 4,
-                bottom: 4,
-                width: segW,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFD27D).withOpacity(0.42),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  for (var i = 0; i < keys.length; i++)
-                    Expanded(
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => onChanged(keys[i]),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Center(
-                            child: AnimatedDefaultTextStyle(
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeOutCubic,
-                              style: TextStyle(
-                                color: i == selectedIndex
-                                    ? AppTheme.templeBrown.withOpacity(0.90)
-                                    : AppTheme.templeBrown.withOpacity(0.55),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                              child: Text(labels[i]),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
 class _StatsGrid extends StatelessWidget {
   const _StatsGrid({required this.data});
 
@@ -627,8 +615,7 @@ class _StatsGrid extends StatelessWidget {
           spacing: spacing,
           runSpacing: spacing,
           children: [
-            for (final it in items)
-              SizedBox(width: w, child: _CleanStatCard(data: it)),
+            for (final it in items) SizedBox(width: w, child: _CleanStatCard(data: it)),
           ],
         );
       },
@@ -853,11 +840,7 @@ class _MiniInsightCard extends StatelessWidget {
 }
 
 class _MinimalBarChartPainter extends CustomPainter {
-  _MinimalBarChartPainter({
-    required this.t,
-    required this.labels,
-    required this.values,
-  });
+  _MinimalBarChartPainter({required this.t, required this.labels, required this.values});
 
   final double t;
   final List<String> labels;
@@ -920,11 +903,7 @@ class _MinimalBarChartPainter extends CustomPainter {
 }
 
 class _MinimalLineChartPainter extends CustomPainter {
-  _MinimalLineChartPainter({
-    required this.t,
-    required this.labels,
-    required this.values,
-  });
+  _MinimalLineChartPainter({required this.t, required this.labels, required this.values});
 
   final double t;
   final List<String> labels;
@@ -988,7 +967,6 @@ class _MinimalLineChartPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..color = const Color(0xFFFFB300).withOpacity(0.70);
-
     canvas.drawPath(partial, linePaint);
 
     final visibleCount = (points.length * t).clamp(0.0, points.length.toDouble()).floor();

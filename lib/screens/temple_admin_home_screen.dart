@@ -27,21 +27,15 @@ class _TempleAdminHomeScreenState extends State<TempleAdminHomeScreen>
   static const List<List<String>> _greetingVariants = [
     [
       '🙏 Welcome, Admin',
-      '✨ May Lord Venkateswara Grace Your Seva Today',
-      '🌸 Serving Every Devotee with Devotion and Precision',
-      '🛕 Sacred Temple Administration Dashboard',
+      'Serving Devotees with Devotion',
     ],
     [
       '🙏 Welcome, Admin',
-      '✨ May Divine Light Guide Each Decision in Calmness',
-      '🌸 Service is Worship — Technology is Our Sacred Lamp',
-      '🛕 Sacred Temple Administration Dashboard',
+      'Serving Devotees with Devotion',
     ],
     [
       '🙏 Welcome, Admin',
-      '✨ May the Temple’s Presence Fill This Space with Peace',
-      '🌸 Protecting and Guiding Devotees with Grace and Care',
-      '🛕 Sacred Temple Administration Dashboard',
+      'Serving Devotees with Devotion',
     ],
   ];
 
@@ -129,9 +123,12 @@ class _TempleAdminHomeScreenState extends State<TempleAdminHomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final showAmbientEffects = _selectedTab != 3;
     return Scaffold(
       body: TempleImmersiveBackground(
         backgroundAsset: null,
+        showParticles: showAmbientEffects,
+        showPetals: showAmbientEffects,
         child: SafeArea(
           child: Stack(
             children: [
@@ -369,10 +366,12 @@ class _HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
-  static const int _cardCount = 10;
-
-  late final PageController _carousel;
-  Timer? _autoScroll;
+  static const List<String> _templeImageAssets = <String>[
+    'assets/images/Malekallu_Tirupathi-balaji,_Arsikere.jpg',
+    'assets/images/img5.jpg',
+    'assets/images/img7.jpg',
+    'assets/images/temple_deity.png',
+  ];
 
   late final AnimationController _enter;
   late final Animation<double> _enterFade;
@@ -380,14 +379,9 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
 
   late final AnimationController _pulse;
 
-  int _tapIndex = -1;
-
   @override
   void initState() {
     super.initState();
-
-    _carousel = PageController(viewportFraction: 0.78);
-    _carousel.addListener(_onCarousel);
 
     _enter = AnimationController(
       vsync: this,
@@ -406,48 +400,14 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       if (!mounted) return;
       _enter.forward();
       _pulse.forward(from: 0);
-      _startAutoScroll();
     });
   }
 
   @override
   void dispose() {
-    _autoScroll?.cancel();
-    _carousel
-      ..removeListener(_onCarousel)
-      ..dispose();
     _enter.dispose();
     _pulse.dispose();
     super.dispose();
-  }
-
-  void _onCarousel() {
-    if (!mounted) return;
-    setState(() {});
-  }
-
-  void _startAutoScroll() {
-    _autoScroll?.cancel();
-    _autoScroll = Timer.periodic(const Duration(milliseconds: 3600), (_) {
-      if (!mounted) return;
-      if (!_carousel.hasClients) return;
-
-      final current = (_carousel.page ?? _carousel.initialPage.toDouble()).round();
-      final next = current + 1;
-      _carousel.animateToPage(
-        next,
-        duration: const Duration(milliseconds: 760),
-        curve: Curves.easeInOutCubic,
-      );
-    });
-  }
-
-  void _onCardTap(int index) {
-    setState(() => _tapIndex = index);
-    Future<void>.delayed(const Duration(milliseconds: 260), () {
-      if (!mounted) return;
-      if (_tapIndex == index) setState(() => _tapIndex = -1);
-    });
   }
 
   @override
@@ -506,83 +466,9 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                         constraints: BoxConstraints(maxWidth: maxW),
                         child: SizedBox(
                           height: cardH,
-                          child: AnimatedBuilder(
-                            animation: Listenable.merge([_carousel, _pulse]),
-                            builder: (context, _) {
-                              final page = _carousel.hasClients
-                                  ? (_carousel.page ?? _carousel.initialPage.toDouble())
-                                  : 0.0;
-
-                              return Stack(
-                                children: [
-                                  Positioned.fill(
-                                    child: IgnorePointer(
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          gradient: RadialGradient(
-                                            center: Alignment.center,
-                                            radius: 0.85,
-                                            colors: [
-                                              const Color(0xFFFFD27D).withOpacity(
-                                                0.10 +
-                                                    0.10 *
-                                                        (1 - (page - page.round()).abs()).clamp(0.0, 1.0),
-                                              ),
-                                              Colors.transparent,
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  PageView.builder(
-                                    controller: _carousel,
-                                    physics: const BouncingScrollPhysics(),
-                                    itemCount: _cardCount,
-                                    itemBuilder: (context, index) {
-                                      final delta = (page - index).clamp(-3.0, 3.0);
-                                      final dist = delta.abs().clamp(0.0, 1.0);
-
-                                      final focus = (1 - dist);
-                                      final scale = 0.88 + focus * 0.14;
-                                      final opacity = 0.55 + focus * 0.45;
-                                      final blurSigma = (1 - focus) * 6.0;
-
-                                      final parallax = -delta * 14.0;
-                                      final isCenter = dist < 0.001;
-                                      final pulseT = Curves.easeOutCubic.transform(_pulse.value);
-                                      final pulse = isCenter ? (1.0 + (1 - pulseT) * 0.02) : 1.0;
-
-                                      final tapped = _tapIndex == index;
-                                      final tapScale = tapped ? 1.03 : 1.0;
-
-                                      return Center(
-                                        child: Opacity(
-                                          opacity: opacity,
-                                          child: Transform.translate(
-                                            offset: Offset(parallax, 0),
-                                            child: Transform.scale(
-                                              scale: scale * pulse * tapScale,
-                                              child: ImageFiltered(
-                                                imageFilter: ImageFilter.blur(
-                                                  sigmaX: blurSigma,
-                                                  sigmaY: blurSigma,
-                                                ),
-                                                child: _TempleCarouselCard(
-                                                  label: 'Temple Image',
-                                                  focused: isCenter,
-                                                  onTap: () => _onCardTap(index),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              );
-                            },
+                          child: _TempleImageShowcase(
+                            imageAssets: _templeImageAssets,
+                            pulse: _pulse,
                           ),
                         ),
                       ),
@@ -598,114 +484,461 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   }
 }
 
-class _TempleCarouselCard extends StatelessWidget {
-  const _TempleCarouselCard({
-    required this.label,
-    required this.focused,
-    required this.onTap,
+class _TempleImageShowcase extends StatefulWidget {
+  const _TempleImageShowcase({
+    required this.imageAssets,
+    required this.pulse,
   });
 
-  final String label;
-  final bool focused;
-  final VoidCallback onTap;
+  final List<String> imageAssets;
+  final AnimationController pulse;
+
+  @override
+  State<_TempleImageShowcase> createState() => _TempleImageShowcaseState();
+}
+
+class _TempleImageShowcaseState extends State<_TempleImageShowcase>
+    with TickerProviderStateMixin {
+  static const Duration _transitionDuration = Duration(seconds: 10);
+  static const Duration _autoAdvanceEvery = Duration(seconds: 10);
+
+  late final AnimationController _transition;
+
+  Timer? _autoAdvance;
+
+  int _index = 0;
+  bool _busy = false;
+  int _direction = 1;
+
+  final Map<String, double> _aspectRatioCache = <String, double>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _transition = AnimationController(vsync: this, duration: _transitionDuration);
+
+    _startOrResetAutoAdvance();
+  }
+
+  @override
+  void dispose() {
+    _autoAdvance?.cancel();
+    _transition.dispose();
+    super.dispose();
+  }
+
+  int _wrap(int i) {
+    final n = widget.imageAssets.length;
+    if (n == 0) return 0;
+    return (i % n + n) % n;
+  }
+
+  void _startOrResetAutoAdvance() {
+    _autoAdvance?.cancel();
+    _autoAdvance = Timer.periodic(_autoAdvanceEvery, (_) {
+      if (!mounted) return;
+      _next();
+    });
+  }
+
+  Future<double?> _resolveAspectRatio(String asset) async {
+    final cached = _aspectRatioCache[asset];
+    if (cached != null) return cached;
+
+    final completer = Completer<ImageInfo>();
+    final stream = AssetImage(asset).resolve(const ImageConfiguration());
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (info, _) {
+        if (!completer.isCompleted) completer.complete(info);
+        stream.removeListener(listener);
+      },
+      onError: (_, __) {
+        if (!completer.isCompleted) completer.completeError('error');
+        stream.removeListener(listener);
+      },
+    );
+    stream.addListener(listener);
+
+    try {
+      final info = await completer.future;
+      final ratio = info.image.width / info.image.height;
+      _aspectRatioCache[asset] = ratio;
+      return ratio;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _next() async {
+    if (_busy) return;
+    if (widget.imageAssets.isEmpty) return;
+
+    setState(() => _busy = true);
+    _direction = 1;
+    _startOrResetAutoAdvance();
+    await _transition.forward(from: 0);
+    if (!mounted) return;
+    setState(() {
+      _index = _wrap(_index + 1);
+      _busy = false;
+    });
+    widget.pulse.forward(from: 0);
+  }
+
+  Future<void> _previous() async {
+    if (_busy) return;
+    if (widget.imageAssets.isEmpty) return;
+
+    setState(() => _busy = true);
+    _direction = -1;
+    _startOrResetAutoAdvance();
+    await _transition.forward(from: 0);
+    if (!mounted) return;
+    setState(() {
+      _index = _wrap(_index - 1);
+      _busy = false;
+    });
+    widget.pulse.forward(from: 0);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final border = const Color(0xFFFFD27D);
-    final bg = const Color(0xFFFFF8E7);
+    final cs = Theme.of(context).colorScheme;
+    final hasImages = widget.imageAssets.isNotEmpty;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 360),
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        color: bg.withOpacity(0.34),
-        border: Border.all(
-          color: border.withOpacity(focused ? 0.92 : 0.52),
-          width: focused ? 1.7 : 1.1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.14),
-            blurRadius: 22,
-            offset: const Offset(0, 14),
-          ),
-          if (focused)
-            BoxShadow(
-              color: border.withOpacity(0.40),
-              blurRadius: 34,
-              spreadRadius: 1.2,
-              offset: const Offset(0, 16),
-            ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            splashColor: border.withOpacity(0.20),
-            highlightColor: border.withOpacity(0.08),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      height: 62,
-                      width: 62,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFFFFE9A8),
-                            Color(0xFFFFB300),
-                            Color(0xFFFF8F00),
-                          ],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: border.withOpacity(focused ? 0.38 : 0.22),
-                            blurRadius: focused ? 28 : 18,
-                            offset: const Offset(0, 12),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.account_balance_rounded,
-                        color: Colors.white,
-                        size: 30,
-                      ),
+    final frontAsset = hasImages ? widget.imageAssets[_wrap(_index)] : null;
+    final midAsset = hasImages ? widget.imageAssets[_wrap(_index + 1)] : null;
+    final backAsset = hasImages ? widget.imageAssets[_wrap(_index + 2)] : null;
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([_transition, widget.pulse]),
+      builder: (context, _) {
+        final t = Curves.easeInOutCubic.transform(_transition.value);
+        final pulseT = Curves.easeOutCubic.transform(widget.pulse.value);
+        final pulse = 1.0 + (1 - pulseT) * 0.015;
+
+        final dir = _direction.toDouble().clamp(-1.0, 1.0);
+
+        final frontX = lerpDouble(0, -74 * dir, t) ?? 0;
+        final frontY = lerpDouble(0, -18, t) ?? 0;
+        final frontScale = lerpDouble(1.0, 0.94, t) ?? 1.0;
+        final frontOpacity = lerpDouble(1.0, 0.0, t) ?? 1.0;
+        final frontShadow = lerpDouble(1.0, 0.0, t) ?? 1.0;
+
+        final midX = lerpDouble(14 * dir, 0, t) ?? 0;
+        final midY = lerpDouble(18, 0, t) ?? 0;
+        final midScale = lerpDouble(0.92, 1.0, t) ?? 1.0;
+        final midRot = lerpDouble(-0.03, 0.0, t) ?? 0.0;
+        final midShadow = lerpDouble(0.75, 1.0, t) ?? 1.0;
+
+        final backX = lerpDouble(26 * dir, 14 * dir, t) ?? 0;
+        final backY = lerpDouble(32, 18, t) ?? 0;
+        final backScale = lerpDouble(0.86, 0.92, t) ?? 1.0;
+        final backRot = lerpDouble(0.04, -0.03, t) ?? 0.0;
+        final backOpacity = lerpDouble(0.70, 0.86, t) ?? 1.0;
+        final backShadow = lerpDouble(0.45, 0.75, t) ?? 1.0;
+
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(0, -0.10),
+                      radius: 0.95,
+                      colors: [
+                        const Color(0xFFFFD27D).withOpacity(0.18),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 1.0],
                     ),
-                    const SizedBox(height: 14),
-                    Text(
-                      label,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: AppTheme.templeBrown.withOpacity(0.88),
-                          ),
-                    ),
-                    const SizedBox(height: 6),
-                    Opacity(
-                      opacity: 0.74,
-                      child: Text(
-                        'Placeholder',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.templeBrown,
-                            ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
+              ),
+            ),
+            _StackCard(
+              opacity: backOpacity,
+              translateX: backX,
+              translateY: backY,
+              scale: backScale,
+              rotation: backRot,
+              shadowStrength: backShadow,
+              child: _DivineImageCard(
+                label: 'Temple Image',
+                asset: backAsset,
+                resolveAspectRatio: _resolveAspectRatio,
+                tint: cs.surface,
+              ),
+            ),
+            _StackCard(
+              opacity: 0.92,
+              translateX: midX,
+              translateY: midY,
+              scale: midScale,
+              rotation: midRot,
+              shadowStrength: midShadow,
+              child: _DivineImageCard(
+                label: 'Temple Image',
+                asset: midAsset,
+                resolveAspectRatio: _resolveAspectRatio,
+                tint: cs.surface,
+              ),
+            ),
+            _StackCard(
+              opacity: frontOpacity,
+              translateX: frontX,
+              translateY: frontY,
+              scale: frontScale * pulse,
+              rotation: 0.0,
+              shadowStrength: frontShadow,
+              child: GestureDetector(
+                onTap: _next,
+                onHorizontalDragEnd: (details) {
+                  if (details.primaryVelocity == null) return;
+                  if (details.primaryVelocity! < -60) {
+                    _next();
+                  } else if (details.primaryVelocity! > 60) {
+                    _previous();
+                  }
+                },
+                child: _DivineImageCard(
+                  label: 'Temple Image',
+                  asset: frontAsset,
+                  resolveAspectRatio: _resolveAspectRatio,
+                  tint: cs.surface,
+                  emphasize: true,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _StackCard extends StatelessWidget {
+  const _StackCard({
+    required this.child,
+    required this.opacity,
+    this.translateX = 0,
+    required this.translateY,
+    required this.scale,
+    required this.rotation,
+    required this.shadowStrength,
+  });
+
+  final Widget child;
+  final double opacity;
+  final double translateX;
+  final double translateY;
+  final double scale;
+  final double rotation;
+  final double shadowStrength;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: opacity < 0.95,
+      child: Opacity(
+        opacity: opacity.clamp(0.0, 1.0),
+        child: Transform.translate(
+          offset: Offset(translateX, translateY),
+          child: Transform.rotate(
+            angle: rotation,
+            child: Transform.scale(
+              scale: scale,
+              child: _ShadowStrength(
+                strength: shadowStrength,
+                child: child,
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ShadowStrength extends InheritedWidget {
+  const _ShadowStrength({required this.strength, required super.child});
+
+  final double strength;
+
+  static double of(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<_ShadowStrength>()?.strength ??
+        1.0;
+  }
+
+  @override
+  bool updateShouldNotify(covariant _ShadowStrength oldWidget) {
+    return oldWidget.strength != strength;
+  }
+}
+
+class _DivineImageCard extends StatelessWidget {
+  const _DivineImageCard({
+    required this.label,
+    required this.asset,
+    required this.resolveAspectRatio,
+    required this.tint,
+    this.emphasize = false,
+  });
+
+  final String label;
+  final String? asset;
+  final Future<double?> Function(String asset) resolveAspectRatio;
+  final Color tint;
+  final bool emphasize;
+
+  @override
+  Widget build(BuildContext context) {
+    final strength = _ShadowStrength.of(context);
+    const border = Color(0xFFFFD27D);
+    const bg = Color(0xFFFFF8E7);
+
+    final outerShadowOpacity = (0.18 * strength).clamp(0.06, 0.22);
+    final goldShadowOpacity = (0.40 * strength).clamp(0.10, 0.46);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 520),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        color: bg.withOpacity(0.78),
+        border: Border.all(
+          color: border.withOpacity(emphasize ? 0.92 : 0.62),
+          width: emphasize ? 1.8 : 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(outerShadowOpacity),
+            blurRadius: 30,
+            offset: const Offset(0, 18),
+          ),
+          BoxShadow(
+            color: border.withOpacity(goldShadowOpacity),
+            blurRadius: emphasize ? 44 : 34,
+            spreadRadius: emphasize ? 1.2 : 0.6,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Column(
+            children: [
+              Expanded(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: tint.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.45),
+                      width: 1,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: asset == null
+                        ? const _TempleImagePlaceholder()
+                        : FutureBuilder<double?>(
+                            future: resolveAspectRatio(asset!),
+                            builder: (context, snapshot) {
+                              final ratio = snapshot.data;
+                              final ar = (ratio == null || ratio.isNaN || ratio <= 0)
+                                  ? 3 / 4
+                                  : ratio;
+
+                              return Center(
+                                child: AspectRatio(
+                                  aspectRatio: ar,
+                                  child: Image.asset(
+                                    asset!,
+                                    fit: BoxFit.contain,
+                                    filterQuality: FilterQuality.high,
+                                    errorBuilder: (context, _, __) {
+                                      return const _TempleImagePlaceholder();
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.2,
+                      color: AppTheme.templeBrown.withOpacity(0.86),
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TempleImagePlaceholder extends StatelessWidget {
+  const _TempleImagePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 64,
+            width: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFFFE9A8),
+                  Color(0xFFFFB300),
+                  Color(0xFFFF8F00),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFFD27D).withOpacity(0.28),
+                  blurRadius: 24,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+              border: Border.all(color: Colors.white.withOpacity(0.55), width: 1.0),
+            ),
+            child: const Icon(
+              Icons.account_balance_rounded,
+              color: Colors.white,
+              size: 32,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Temple Image Placeholder',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.templeBrown.withOpacity(0.82),
+                ),
+          ),
+        ],
       ),
     );
   }
@@ -718,22 +951,38 @@ class _GreetingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textStyle = Theme.of(context).textTheme.titleLarge?.copyWith(
+    final headline = Theme.of(context).textTheme.headlineSmall?.copyWith(
           color: Colors.white,
           fontWeight: FontWeight.w900,
-          height: 1.25,
+          letterSpacing: 0.2,
+          height: 1.10,
           shadows: [
-            Shadow(color: const Color(0xFFFFD27D).withOpacity(0.55), blurRadius: 18),
-            Shadow(color: Colors.black.withOpacity(0.65), blurRadius: 16),
+            Shadow(color: const Color(0xFFFFD27D).withOpacity(0.60), blurRadius: 22),
+            Shadow(color: Colors.black.withOpacity(0.55), blurRadius: 16),
           ],
         );
+
+    final sub = Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: Colors.white.withOpacity(0.92),
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.15,
+          height: 1.18,
+          shadows: [
+            Shadow(color: const Color(0xFFFFD27D).withOpacity(0.45), blurRadius: 18),
+            Shadow(color: Colors.black.withOpacity(0.45), blurRadius: 14),
+          ],
+        );
+
+    final l0 = lines.isNotEmpty ? lines.first : '';
+    final l1 = lines.length > 1 ? lines[1] : '';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (final line in lines) ...[
-          Text(line, style: textStyle, textAlign: TextAlign.center),
-          const SizedBox(height: 8),
+        Text(l0, style: headline, textAlign: TextAlign.center),
+        if (l1.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(l1, style: sub, textAlign: TextAlign.center),
         ],
       ],
     );
@@ -868,6 +1117,7 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = selected ? Colors.white : AppTheme.templeBrown.withOpacity(0.78);
+    final glow = const Color(0xFFFFD27D);
 
     return Material(
       color: Colors.transparent,
@@ -882,7 +1132,22 @@ class _NavItem extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(data.icon, color: color),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  decoration: BoxDecoration(
+                    boxShadow: selected
+                        ? [
+                            BoxShadow(
+                              color: glow.withOpacity(0.55),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
+                            ),
+                          ]
+                        : const [],
+                  ),
+                  child: Icon(data.icon, color: color),
+                ),
                 const SizedBox(height: 6),
                 Text(
                   data.label,
@@ -893,6 +1158,14 @@ class _NavItem extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                     fontSize: 11,
                     letterSpacing: 0.1,
+                    shadows: selected
+                        ? [
+                            Shadow(
+                              color: glow.withOpacity(0.50),
+                              blurRadius: 14,
+                            ),
+                          ]
+                        : null,
                   ),
                 ),
               ],

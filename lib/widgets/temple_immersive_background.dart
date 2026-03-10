@@ -11,12 +11,16 @@ class TempleImmersiveBackground extends StatefulWidget {
     this.backgroundAsset,
     this.topLeftDecorationAsset,
     this.topRightDecorationAsset,
+    this.showParticles = true,
+    this.showPetals = true,
   });
 
   final Widget child;
   final String? backgroundAsset;
   final String? topLeftDecorationAsset;
   final String? topRightDecorationAsset;
+  final bool showParticles;
+  final bool showPetals;
 
   @override
   State<TempleImmersiveBackground> createState() =>
@@ -155,6 +159,7 @@ class _TempleImmersiveBackgroundState extends State<TempleImmersiveBackground>
             child: AnimatedBuilder(
               animation: _particles,
               builder: (context, _) {
+                if (!widget.showParticles) return const SizedBox.shrink();
                 return CustomPaint(
                   painter: _SacredParticlePainter(
                     t: _particles.value,
@@ -170,6 +175,7 @@ class _TempleImmersiveBackgroundState extends State<TempleImmersiveBackground>
             child: AnimatedBuilder(
               animation: _petals,
               builder: (context, _) {
+                if (!widget.showPetals) return const SizedBox.shrink();
                 return CustomPaint(
                   painter: _PetalPainter(
                     t: _petals.value,

@@ -1,0 +1,7 @@
+flask==2.3.3
+flask-cors==4.0.0
+boto3==1.28.85
+python-dotenv==1.0.0
+pillow==10.0.1
+uuid==1.30
+werkzeug==2.3.7

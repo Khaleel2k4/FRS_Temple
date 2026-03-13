@@ -4,6 +4,8 @@ import '../theme/app_theme.dart';
 
 const int _kPageSize = 6;
 
+enum _Period { daily, weekly, monthly, yearly }
+
 class ViewDataScreen extends StatefulWidget {
   const ViewDataScreen({super.key});
 
@@ -13,119 +15,76 @@ class ViewDataScreen extends StatefulWidget {
 
 class _ViewDataScreenState extends State<ViewDataScreen>
     with TickerProviderStateMixin {
-  late final AnimationController _enter;
-  late final AnimationController _filterReveal;
+  _Period _period = _Period.daily;
 
-  DateTime? _startDate;
-  DateTime? _endDate;
-  TimeOfDay? _startTime;
-  TimeOfDay? _endTime;
+  DateTime? _selectedDate;
 
   String _camera = 'All Cameras';
   final TextEditingController _search = TextEditingController();
 
-  late final List<_DetectionRecord> _all;
-  List<_DetectionRecord> _filtered = const [];
+  late final List<_DailyDetectionRecord> _dailyAll;
+  late final List<_WeeklySummaryRecord> _weeklyAll;
+  late final List<_MonthlySummaryRecord> _monthlyAll;
+  late final List<_YearlySummaryRecord> _yearlyAll;
+
+  List<_DailyDetectionRecord> _dailyFiltered = const [];
+  List<_WeeklySummaryRecord> _weeklyFiltered = const [];
+  List<_MonthlySummaryRecord> _monthlyFiltered = const [];
+  List<_YearlySummaryRecord> _yearlyFiltered = const [];
 
   int _page = 1;
   static const int _pageSize = _kPageSize;
 
+  int? _dailySortColumnIndex;
+  bool _dailySortAscending = true;
+
+  int? _weeklySortColumnIndex;
+  bool _weeklySortAscending = true;
+
+  int? _monthlySortColumnIndex;
+  bool _monthlySortAscending = true;
+
+  int? _yearlySortColumnIndex;
+  bool _yearlySortAscending = true;
+
   @override
   void initState() {
     super.initState();
-    _enter = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..forward();
-
-    _filterReveal = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 380),
-    )..forward();
-
     final now = DateTime.now();
-    _startDate = DateTime(now.year, now.month, now.day);
-    _endDate = DateTime(now.year, now.month, now.day);
+    _selectedDate = DateTime(now.year, now.month, now.day);
 
-    _all = _demoRecords(now);
+    _dailyAll = _demoDailyRecords(now);
+    _weeklyAll = _demoWeeklyRecords(now);
+    _monthlyAll = _demoMonthlyRecords(now);
+    _yearlyAll = _demoYearlyRecords(now);
     _apply();
   }
 
   @override
   void dispose() {
-    _enter.dispose();
-    _filterReveal.dispose();
     _search.dispose();
     super.dispose();
   }
 
-  Future<void> _pickStartDate() async {
+  Future<void> _pickSelectedDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _startDate ?? DateTime.now(),
+      initialDate: _selectedDate ?? DateTime.now(),
       firstDate: DateTime(2020, 1, 1),
       lastDate: DateTime(2030, 12, 31),
-      helpText: 'Select Start Date',
+      helpText: 'Select Date',
     );
     if (!mounted) return;
     if (picked == null) return;
     setState(() {
-      _startDate = DateTime(picked.year, picked.month, picked.day);
-      if (_endDate != null && _endDate!.isBefore(_startDate!)) _endDate = _startDate;
-    });
-  }
-
-  Future<void> _pickEndDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _endDate ?? _startDate ?? DateTime.now(),
-      firstDate: DateTime(2020, 1, 1),
-      lastDate: DateTime(2030, 12, 31),
-      helpText: 'Select End Date',
-    );
-    if (!mounted) return;
-    if (picked == null) return;
-    setState(() {
-      _endDate = DateTime(picked.year, picked.month, picked.day);
-      if (_startDate != null && _endDate!.isBefore(_startDate!)) _startDate = _endDate;
-    });
-  }
-
-  Future<void> _pickStartTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _startTime ?? const TimeOfDay(hour: 9, minute: 0),
-      helpText: 'Select Start Time',
-    );
-    if (!mounted) return;
-    if (picked == null) return;
-    setState(() {
-      _startTime = picked;
-      if (_endTime != null && _compareTime(_endTime!, _startTime!) < 0) _endTime = _startTime;
-    });
-  }
-
-  Future<void> _pickEndTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _endTime ?? _startTime ?? const TimeOfDay(hour: 18, minute: 0),
-      helpText: 'Select End Time',
-    );
-    if (!mounted) return;
-    if (picked == null) return;
-    setState(() {
-      _endTime = picked;
-      if (_startTime != null && _compareTime(_endTime!, _startTime!) < 0) _startTime = _endTime;
+      _selectedDate = DateTime(picked.year, picked.month, picked.day);
     });
   }
 
   void _reset() {
     final now = DateTime.now();
     setState(() {
-      _startDate = DateTime(now.year, now.month, now.day);
-      _endDate = DateTime(now.year, now.month, now.day);
-      _startTime = null;
-      _endTime = null;
+      _selectedDate = DateTime(now.year, now.month, now.day);
       _camera = 'All Cameras';
       _search.clear();
       _page = 1;
@@ -136,105 +95,264 @@ class _ViewDataScreenState extends State<ViewDataScreen>
   void _apply() {
     final q = _search.text.trim().toLowerCase();
 
-    final start = _startDate;
-    final end = _endDate;
-    final sTime = _startTime;
-    final eTime = _endTime;
+    final selectedDate = _selectedDate;
 
-    final filtered = _all.where((r) {
-      if (_camera != 'All Cameras' && r.camera != _camera) return false;
+    final dailyFiltered = _dailyAll.where((r) {
+      if (_camera != 'All Cameras' && r.cameraLocation != _camera) return false;
 
-      if (start != null) {
+      if (selectedDate != null) {
         final rd = DateTime(r.timestamp.year, r.timestamp.month, r.timestamp.day);
-        if (rd.isBefore(start)) return false;
-      }
-      if (end != null) {
-        final rd = DateTime(r.timestamp.year, r.timestamp.month, r.timestamp.day);
-        if (rd.isAfter(end)) return false;
-      }
-
-      if (sTime != null) {
-        final rt = TimeOfDay(hour: r.timestamp.hour, minute: r.timestamp.minute);
-        if (_compareTime(rt, sTime) < 0) return false;
-      }
-      if (eTime != null) {
-        final rt = TimeOfDay(hour: r.timestamp.hour, minute: r.timestamp.minute);
-        if (_compareTime(rt, eTime) > 0) return false;
+        if (rd != selectedDate) return false;
       }
 
       if (q.isNotEmpty) {
-        final hay = '${r.detectionId} ${r.camera} ${r.status.name}'.toLowerCase();
+        final hay = '${r.detectionId} ${r.cameraLocation} ${r.imagePath}'.toLowerCase();
         if (!hay.contains(q)) return false;
       }
 
       return true;
     }).toList(growable: false);
 
+    final weeklyFiltered = _weeklyAll.where((r) {
+      if (_camera != 'All Cameras') {
+        final hay = '${r.peakDay}'.toLowerCase();
+        if (q.isNotEmpty && !hay.contains(q)) return false;
+      }
+      if (q.isNotEmpty) {
+        final hay = 'week ${r.weekNumber} ${r.peakDay}'.toLowerCase();
+        if (!hay.contains(q)) return false;
+      }
+      return true;
+    }).toList(growable: false);
+
+    final monthlyFiltered = _monthlyAll.where((r) {
+      if (q.isNotEmpty) {
+        final hay = '${r.month} ${r.peakDay}'.toLowerCase();
+        if (!hay.contains(q)) return false;
+      }
+      return true;
+    }).toList(growable: false);
+
+    final yearlyFiltered = _yearlyAll.where((r) {
+      if (q.isNotEmpty) {
+        final hay = '${r.year} ${r.peakMonth}'.toLowerCase();
+        if (!hay.contains(q)) return false;
+      }
+      return true;
+    }).toList(growable: false);
+
     setState(() {
-      _filtered = filtered;
-      _page = _page.clamp(1, _pageCount(filtered.length));
+      _dailyFiltered = dailyFiltered;
+      _weeklyFiltered = weeklyFiltered;
+      _monthlyFiltered = monthlyFiltered;
+      _yearlyFiltered = yearlyFiltered;
+      _page = _page.clamp(1, _pageCount(_activeTotalCount()));
     });
+  }
+
+  int _activeTotalCount() {
+    switch (_period) {
+      case _Period.daily:
+        return _dailyFiltered.length;
+      case _Period.weekly:
+        return _weeklyFiltered.length;
+      case _Period.monthly:
+        return _monthlyFiltered.length;
+      case _Period.yearly:
+        return _yearlyFiltered.length;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final pageCount = _pageCount(_filtered.length);
+    final total = _activeTotalCount();
+    final pageCount = _pageCount(total);
     final page = _page.clamp(1, pageCount);
     final start = (page - 1) * _pageSize;
-    final end = (start + _pageSize).clamp(0, _filtered.length);
-    final pageItems = start < end ? _filtered.sublist(start, end) : const <_DetectionRecord>[];
+    final end = (start + _pageSize).clamp(0, total);
 
-    return AnimatedBuilder(
-      animation: _enter,
-      builder: (context, _) {
-        final t = Curves.easeOutCubic.transform(_enter.value);
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 88, 16, 104),
-          child: Opacity(
-            opacity: t,
-            child: Transform.translate(
-              offset: Offset(0, (1 - t) * 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _Header(),
-                  const SizedBox(height: 12),
-                  _FilterPanel(
-                    reveal: _filterReveal,
-                    startDate: _startDate,
-                    endDate: _endDate,
-                    startTime: _startTime,
-                    endTime: _endTime,
-                    camera: _camera,
-                    searchController: _search,
-                    onStartDateTap: _pickStartDate,
-                    onEndDateTap: _pickEndDate,
-                    onStartTimeTap: _pickStartTime,
-                    onEndTimeTap: _pickEndTime,
-                    onCameraChanged: (v) => setState(() => _camera = v),
-                    onApply: _apply,
-                    onReset: _reset,
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: _RecordsSection(
-                      records: pageItems,
-                      isEmpty: _filtered.isEmpty,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _PaginationBar(
-                    page: page,
-                    pageCount: pageCount,
-                    onPageChanged: (p) => setState(() => _page = p),
-                  ),
-                ],
-              ),
+    final dailyPageItems = _period == _Period.daily
+        ? (start < end
+            ? _dailyFiltered.sublist(start, end)
+            : const <_DailyDetectionRecord>[])
+        : const <_DailyDetectionRecord>[];
+    final weeklyPageItems = _period == _Period.weekly
+        ? (start < end
+            ? _weeklyFiltered.sublist(start, end)
+            : const <_WeeklySummaryRecord>[])
+        : const <_WeeklySummaryRecord>[];
+    final monthlyPageItems = _period == _Period.monthly
+        ? (start < end
+            ? _monthlyFiltered.sublist(start, end)
+            : const <_MonthlySummaryRecord>[])
+        : const <_MonthlySummaryRecord>[];
+    final yearlyPageItems = _period == _Period.yearly
+        ? (start < end
+            ? _yearlyFiltered.sublist(start, end)
+            : const <_YearlySummaryRecord>[])
+        : const <_YearlySummaryRecord>[];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 88, 16, 104),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _Header(),
+          const SizedBox(height: 10),
+          _PeriodSelector(
+            value: _period,
+            onChanged: (p) {
+              setState(() {
+                _period = p;
+                _page = 1;
+              });
+              _apply();
+            },
+          ),
+          const SizedBox(height: 10),
+          _FilterRow(
+            selectedDate: _selectedDate,
+            camera: _camera,
+            searchController: _search,
+            onDateTap: _pickSelectedDate,
+            onCameraChanged: (v) => setState(() => _camera = v),
+            onApply: _apply,
+            onReset: _reset,
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: _RecordsSection(
+              period: _period,
+              dailyRecords: dailyPageItems,
+              weeklyRecords: weeklyPageItems,
+              monthlyRecords: monthlyPageItems,
+              yearlyRecords: yearlyPageItems,
+              isEmpty: total == 0,
+              dailySortColumnIndex: _dailySortColumnIndex,
+              dailySortAscending: _dailySortAscending,
+              onDailySort: (columnIndex, ascending) {
+                setState(() {
+                  _dailySortColumnIndex = columnIndex;
+                  _dailySortAscending = ascending;
+                  _sortDaily(columnIndex, ascending);
+                });
+              },
+              weeklySortColumnIndex: _weeklySortColumnIndex,
+              weeklySortAscending: _weeklySortAscending,
+              onWeeklySort: (columnIndex, ascending) {
+                setState(() {
+                  _weeklySortColumnIndex = columnIndex;
+                  _weeklySortAscending = ascending;
+                  _sortWeekly(columnIndex, ascending);
+                });
+              },
+              monthlySortColumnIndex: _monthlySortColumnIndex,
+              monthlySortAscending: _monthlySortAscending,
+              onMonthlySort: (columnIndex, ascending) {
+                setState(() {
+                  _monthlySortColumnIndex = columnIndex;
+                  _monthlySortAscending = ascending;
+                  _sortMonthly(columnIndex, ascending);
+                });
+              },
+              yearlySortColumnIndex: _yearlySortColumnIndex,
+              yearlySortAscending: _yearlySortAscending,
+              onYearlySort: (columnIndex, ascending) {
+                setState(() {
+                  _yearlySortColumnIndex = columnIndex;
+                  _yearlySortAscending = ascending;
+                  _sortYearly(columnIndex, ascending);
+                });
+              },
             ),
           ),
-        );
-      },
+          const SizedBox(height: 10),
+          _PaginationBar(
+            page: page,
+            pageCount: pageCount,
+            onPageChanged: (p) => setState(() => _page = p),
+          ),
+        ],
+      ),
     );
+  }
+
+  void _sortDaily(int columnIndex, bool ascending) {
+    int cmp(_DailyDetectionRecord a, _DailyDetectionRecord b) {
+      switch (columnIndex) {
+        case 3:
+          return a.devoteeCount.compareTo(b.devoteeCount);
+        case 4:
+          final ad = DateTime(a.timestamp.year, a.timestamp.month, a.timestamp.day);
+          final bd = DateTime(b.timestamp.year, b.timestamp.month, b.timestamp.day);
+          return ad.compareTo(bd);
+        case 5:
+          final at = a.timestamp.hour * 60 + a.timestamp.minute;
+          final bt = b.timestamp.hour * 60 + b.timestamp.minute;
+          return at.compareTo(bt);
+        default:
+          return a.detectionId.compareTo(b.detectionId);
+      }
+    }
+
+    _dailyFiltered = [..._dailyFiltered]..sort((a, b) {
+        final c = cmp(a, b);
+        return ascending ? c : -c;
+      });
+  }
+
+  void _sortWeekly(int columnIndex, bool ascending) {
+    int cmp(_WeeklySummaryRecord a, _WeeklySummaryRecord b) {
+      switch (columnIndex) {
+        case 1:
+          return a.totalDetections.compareTo(b.totalDetections);
+        case 2:
+          return a.totalDevotees.compareTo(b.totalDevotees);
+        default:
+          return a.weekNumber.compareTo(b.weekNumber);
+      }
+    }
+
+    _weeklyFiltered = [..._weeklyFiltered]..sort((a, b) {
+        final c = cmp(a, b);
+        return ascending ? c : -c;
+      });
+  }
+
+  void _sortMonthly(int columnIndex, bool ascending) {
+    int cmp(_MonthlySummaryRecord a, _MonthlySummaryRecord b) {
+      switch (columnIndex) {
+        case 1:
+          return a.totalDetections.compareTo(b.totalDetections);
+        case 2:
+          return a.totalDevotees.compareTo(b.totalDevotees);
+        default:
+          return a.month.compareTo(b.month);
+      }
+    }
+
+    _monthlyFiltered = [..._monthlyFiltered]..sort((a, b) {
+        final c = cmp(a, b);
+        return ascending ? c : -c;
+      });
+  }
+
+  void _sortYearly(int columnIndex, bool ascending) {
+    int cmp(_YearlySummaryRecord a, _YearlySummaryRecord b) {
+      switch (columnIndex) {
+        case 1:
+          return a.totalVisitors.compareTo(b.totalVisitors);
+        case 2:
+          return a.totalDetections.compareTo(b.totalDetections);
+        default:
+          return a.year.compareTo(b.year);
+      }
+    }
+
+    _yearlyFiltered = [..._yearlyFiltered]..sort((a, b) {
+        final c = cmp(a, b);
+        return ascending ? c : -c;
+      });
   }
 }
 
@@ -256,104 +374,102 @@ class _Header extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('📋 Devotee Detection Records', style: titleStyle),
+        Text('Devotee Detection Records', style: titleStyle),
         const SizedBox(height: 4),
-        Text('View and filter temple visitor data', style: subStyle),
+        Text('Temple Visitor Data', style: subStyle),
       ],
     );
   }
 }
 
-class _FilterPanel extends StatelessWidget {
-  const _FilterPanel({
-    required this.reveal,
-    required this.startDate,
-    required this.endDate,
-    required this.startTime,
-    required this.endTime,
+class _PeriodSelector extends StatelessWidget {
+  const _PeriodSelector({required this.value, required this.onChanged});
+
+  final _Period value;
+  final ValueChanged<_Period> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          'View Data For',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppTheme.templeBrown.withOpacity(0.80),
+              ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: DropdownButtonFormField<_Period>(
+            value: value,
+            isDense: true,
+            decoration: InputDecoration(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: const Color(0xFFE6D7B5).withOpacity(0.9)),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            items: const [
+              DropdownMenuItem(value: _Period.daily, child: Text('Daily')),
+              DropdownMenuItem(value: _Period.weekly, child: Text('Weekly')),
+              DropdownMenuItem(value: _Period.monthly, child: Text('Monthly')),
+              DropdownMenuItem(value: _Period.yearly, child: Text('Yearly')),
+            ],
+            onChanged: (v) {
+              if (v == null) return;
+              onChanged(v);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FilterRow extends StatelessWidget {
+  const _FilterRow({
+    required this.selectedDate,
     required this.camera,
     required this.searchController,
-    required this.onStartDateTap,
-    required this.onEndDateTap,
-    required this.onStartTimeTap,
-    required this.onEndTimeTap,
+    required this.onDateTap,
     required this.onCameraChanged,
     required this.onApply,
     required this.onReset,
   });
 
-  final Animation<double> reveal;
-  final DateTime? startDate;
-  final DateTime? endDate;
-  final TimeOfDay? startTime;
-  final TimeOfDay? endTime;
+  final DateTime? selectedDate;
   final String camera;
   final TextEditingController searchController;
-  final VoidCallback onStartDateTap;
-  final VoidCallback onEndDateTap;
-  final VoidCallback onStartTimeTap;
-  final VoidCallback onEndTimeTap;
+  final VoidCallback onDateTap;
   final ValueChanged<String> onCameraChanged;
   final VoidCallback onApply;
   final VoidCallback onReset;
 
   @override
   Widget build(BuildContext context) {
-    const border = Color(0xFFE6D7B5);
-    const bg = Color(0xFFFFF8E7);
-
-    return SizeTransition(
-      sizeFactor: CurvedAnimation(parent: reveal, curve: Curves.easeOutCubic),
-      axisAlignment: -1,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: border, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 16,
-              offset: const Offset(0, 10),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 180,
+            child: _FieldButton(
+              label: 'Date',
+              value: selectedDate == null ? 'Select' : _formatDateNumeric(selectedDate!),
+              icon: Icons.calendar_month_rounded,
+              onTap: onDateTap,
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Filter Panel',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.templeBrown.withOpacity(0.88),
-                  ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _FieldButton(
-                    label: 'Start Date',
-                    value: startDate == null ? 'Select' : _formatDate(startDate!),
-                    icon: Icons.calendar_month_rounded,
-                    onTap: onStartDateTap,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _FieldButton(
-                    label: 'End Date',
-                    value: endDate == null ? 'Select' : _formatDate(endDate!),
-                    icon: Icons.calendar_month_rounded,
-                    onTap: onEndDateTap,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _DropdownField(
-              label: 'Camera Filter',
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 210,
+            child: _DropdownField(
+              label: 'Camera',
               value: camera,
               options: const [
                 'All Cameras',
@@ -366,49 +482,48 @@ class _FilterPanel extends StatelessWidget {
               icon: Icons.videocam_rounded,
               onChanged: onCameraChanged,
             ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _FieldButton(
-                    label: 'Start Time',
-                    value: startTime == null ? 'Any' : startTime!.format(context),
-                    icon: Icons.schedule_rounded,
-                    onTap: onStartTimeTap,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _FieldButton(
-                    label: 'End Time',
-                    value: endTime == null ? 'Any' : endTime!.format(context),
-                    icon: Icons.schedule_rounded,
-                    onTap: onEndTimeTap,
-                  ),
-                ),
-              ],
+          ),
+          const SizedBox(width: 10),
+          SizedBox(width: 260, child: _SearchField(controller: searchController)),
+          const SizedBox(width: 10),
+          _SmallButton(label: 'Filter', onTap: onApply),
+          const SizedBox(width: 8),
+          _SmallButton(label: 'Reset', onTap: onReset, outlined: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _SmallButton extends StatelessWidget {
+  const _SmallButton({required this.label, required this.onTap, this.outlined = false});
+
+  final String label;
+  final VoidCallback onTap;
+  final bool outlined;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = outlined ? Colors.transparent : const Color(0xFFFFD27D).withOpacity(0.55);
+    final border = const Color(0xFFE6D7B5).withOpacity(0.9);
+    return Material(
+      color: bg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: border),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: AppTheme.templeBrown.withOpacity(0.85),
             ),
-            const SizedBox(height: 10),
-            _SearchField(controller: searchController),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _PrimaryButton(
-                    label: '🔎 Apply Filter',
-                    onTap: onApply,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _OutlineButton(
-                    label: '♻ Reset Filters',
-                    onTap: onReset,
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -427,7 +542,7 @@ class _SearchField extends StatelessWidget {
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
         isDense: true,
-        hintText: 'Search detection records...',
+        hintText: 'Search by Detection ID or Camera',
         prefixIcon: Icon(Icons.search_rounded, color: AppTheme.templeBrown.withOpacity(0.60)),
         filled: true,
         fillColor: Colors.white.withOpacity(0.70),
@@ -644,10 +759,49 @@ class _OutlineButton extends StatelessWidget {
 }
 
 class _RecordsSection extends StatelessWidget {
-  const _RecordsSection({required this.records, required this.isEmpty});
+  const _RecordsSection({
+    required this.period,
+    required this.dailyRecords,
+    required this.weeklyRecords,
+    required this.monthlyRecords,
+    required this.yearlyRecords,
+    required this.isEmpty,
+    required this.dailySortColumnIndex,
+    required this.dailySortAscending,
+    required this.onDailySort,
+    required this.weeklySortColumnIndex,
+    required this.weeklySortAscending,
+    required this.onWeeklySort,
+    required this.monthlySortColumnIndex,
+    required this.monthlySortAscending,
+    required this.onMonthlySort,
+    required this.yearlySortColumnIndex,
+    required this.yearlySortAscending,
+    required this.onYearlySort,
+  });
 
-  final List<_DetectionRecord> records;
+  final _Period period;
+  final List<_DailyDetectionRecord> dailyRecords;
+  final List<_WeeklySummaryRecord> weeklyRecords;
+  final List<_MonthlySummaryRecord> monthlyRecords;
+  final List<_YearlySummaryRecord> yearlyRecords;
   final bool isEmpty;
+
+  final int? dailySortColumnIndex;
+  final bool dailySortAscending;
+  final void Function(int columnIndex, bool ascending) onDailySort;
+
+  final int? weeklySortColumnIndex;
+  final bool weeklySortAscending;
+  final void Function(int columnIndex, bool ascending) onWeeklySort;
+
+  final int? monthlySortColumnIndex;
+  final bool monthlySortAscending;
+  final void Function(int columnIndex, bool ascending) onMonthlySort;
+
+  final int? yearlySortColumnIndex;
+  final bool yearlySortAscending;
+  final void Function(int columnIndex, bool ascending) onYearlySort;
 
   @override
   Widget build(BuildContext context) {
@@ -659,7 +813,7 @@ class _RecordsSection extends StatelessWidget {
             Icon(Icons.inbox_rounded, size: 42, color: AppTheme.templeBrown.withOpacity(0.45)),
             const SizedBox(height: 10),
             Text(
-              'No detection records found for the selected filters.',
+              'No detection data available.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
@@ -671,152 +825,308 @@ class _RecordsSection extends StatelessWidget {
       );
     }
 
-    return ListView.separated(
-      physics: const BouncingScrollPhysics(),
-      itemCount: records.length,
-      separatorBuilder: (context, _) => const SizedBox(height: 10),
-      itemBuilder: (context, i) {
-        final r = records[i];
-        return TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: 1),
-          duration: Duration(milliseconds: 240 + i * 40),
-          curve: Curves.easeOutCubic,
-          builder: (context, t, child) {
-            return Opacity(
-              opacity: t,
-              child: Transform.translate(offset: Offset(0, (1 - t) * 10), child: child),
-            );
-          },
-          child: _RecordRow(record: r),
-        );
-      },
-    );
-  }
-}
-
-class _RecordRow extends StatelessWidget {
-  const _RecordRow({required this.record});
-
-  final _DetectionRecord record;
-
-  @override
-  Widget build(BuildContext context) {
     const border = Color(0xFFE6D7B5);
-    const bg = Color(0xFFFFF8E7);
-    const accent = Color(0xFFFFD27D);
-    final statusColor = record.status == _DetectionStatus.detected
-        ? const Color(0xFF2E7D32)
-        : const Color(0xFF6D4C41);
+    const headerBg = Color(0xFFFFD27D);
+    final rowAlt = const Color(0xFFFFF8E7).withOpacity(0.55);
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: border.withOpacity(0.9), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
+    Widget table;
+    switch (period) {
+      case _Period.daily:
+        table = DataTable(
+          headingRowColor: WidgetStateProperty.all(headerBg.withOpacity(0.35)),
+          dataRowMinHeight: 52,
+          dataRowMaxHeight: 64,
+          showBottomBorder: true,
+          border: TableBorder(
+            horizontalInside: BorderSide(color: border.withOpacity(0.55)),
+            bottom: BorderSide(color: border.withOpacity(0.85)),
           ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 40,
-            width: 40,
-            decoration: BoxDecoration(
-              color: accent.withOpacity(0.26),
-              borderRadius: BorderRadius.circular(12),
+          sortColumnIndex: dailySortColumnIndex,
+          sortAscending: dailySortAscending,
+          columns: [
+            const DataColumn(label: Text('Detection ID')),
+            const DataColumn(label: Text('Camera Location')),
+            const DataColumn(label: Text('Image')),
+            DataColumn(
+              label: const Text('Devotee Count'),
+              numeric: true,
+              onSort: (i, a) => onDailySort(i, a),
             ),
-            child: Icon(Icons.videocam_rounded, color: AppTheme.templeBrown.withOpacity(0.75), size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        record.detectionId,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.templeBrown.withOpacity(0.92),
-                            ),
+            DataColumn(
+              label: const Text('Date'),
+              onSort: (i, a) => onDailySort(i, a),
+            ),
+            DataColumn(
+              label: const Text('Time'),
+              onSort: (i, a) => onDailySort(i, a),
+            ),
+            const DataColumn(label: Text('Timestamp')),
+            const DataColumn(label: Text('Image Path')),
+          ],
+          rows: [
+            for (int i = 0; i < dailyRecords.length; i++)
+              DataRow(
+                color: WidgetStateProperty.all(i.isOdd ? rowAlt : Colors.transparent),
+                cells: [
+                  DataCell(Text(dailyRecords[i].detectionId)),
+                  DataCell(Text(dailyRecords[i].cameraLocation)),
+                  DataCell(
+                    _ThumbnailCell(
+                      asset: dailyRecords[i].thumbnailAsset,
+                      onTap: () => _showImagePreview(
+                        context,
+                        dailyRecords[i].thumbnailAsset,
+                        dailyRecords[i].detectionId,
                       ),
                     ),
-                    _StatusChip(label: record.status.label, color: statusColor),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  record.camera,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.templeBrown.withOpacity(0.65),
-                      ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(Icons.schedule_rounded, size: 16, color: AppTheme.templeBrown.withOpacity(0.55)),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${_formatDate(record.timestamp)}  ${_formatTime(record.timestamp)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.templeBrown.withOpacity(0.60),
-                          ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      'Devotee Count: ${record.devoteeCount}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.templeBrown.withOpacity(0.78),
-                          ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                  DataCell(Text('${dailyRecords[i].devoteeCount}')),
+                  DataCell(Text(_formatDateNumeric(dailyRecords[i].timestamp))),
+                  DataCell(Text(_formatTime(dailyRecords[i].timestamp))),
+                  DataCell(Text(_formatTimestamp(dailyRecords[i].timestamp))),
+                  DataCell(Text(dailyRecords[i].imagePath)),
+                ],
+              ),
+          ],
+        );
+
+      case _Period.weekly:
+        table = DataTable(
+          headingRowColor: WidgetStateProperty.all(headerBg.withOpacity(0.35)),
+          showBottomBorder: true,
+          border: TableBorder(
+            horizontalInside: BorderSide(color: border.withOpacity(0.55)),
+            bottom: BorderSide(color: border.withOpacity(0.85)),
           ),
-        ],
-      ),
-    );
-  }
-}
+          sortColumnIndex: weeklySortColumnIndex,
+          sortAscending: weeklySortAscending,
+          columns: [
+            const DataColumn(label: Text('Week Number')),
+            DataColumn(
+              label: const Text('Total Detections'),
+              numeric: true,
+              onSort: (i, a) => onWeeklySort(i, a),
+            ),
+            DataColumn(
+              label: const Text('Total Devotees'),
+              numeric: true,
+              onSort: (i, a) => onWeeklySort(i, a),
+            ),
+            const DataColumn(label: Text('Peak Day')),
+            const DataColumn(label: Text('Average Visitors')),
+          ],
+          rows: [
+            for (int i = 0; i < weeklyRecords.length; i++)
+              DataRow(
+                color: WidgetStateProperty.all(i.isOdd ? rowAlt : Colors.transparent),
+                cells: [
+                  DataCell(Text('Week ${weeklyRecords[i].weekNumber}')),
+                  DataCell(Text('${weeklyRecords[i].totalDetections}')),
+                  DataCell(Text('${weeklyRecords[i].totalDevotees}')),
+                  DataCell(Text(weeklyRecords[i].peakDay)),
+                  DataCell(Text('${weeklyRecords[i].averageVisitors}')),
+                ],
+              ),
+          ],
+        );
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.color});
+      case _Period.monthly:
+        table = DataTable(
+          headingRowColor: WidgetStateProperty.all(headerBg.withOpacity(0.35)),
+          showBottomBorder: true,
+          border: TableBorder(
+            horizontalInside: BorderSide(color: border.withOpacity(0.55)),
+            bottom: BorderSide(color: border.withOpacity(0.85)),
+          ),
+          sortColumnIndex: monthlySortColumnIndex,
+          sortAscending: monthlySortAscending,
+          columns: [
+            const DataColumn(label: Text('Month')),
+            DataColumn(
+              label: const Text('Total Detections'),
+              numeric: true,
+              onSort: (i, a) => onMonthlySort(i, a),
+            ),
+            DataColumn(
+              label: const Text('Total Devotees'),
+              numeric: true,
+              onSort: (i, a) => onMonthlySort(i, a),
+            ),
+            const DataColumn(label: Text('Average Daily Visitors')),
+            const DataColumn(label: Text('Peak Day')),
+          ],
+          rows: [
+            for (int i = 0; i < monthlyRecords.length; i++)
+              DataRow(
+                color: WidgetStateProperty.all(i.isOdd ? rowAlt : Colors.transparent),
+                cells: [
+                  DataCell(Text(monthlyRecords[i].month)),
+                  DataCell(Text('${monthlyRecords[i].totalDetections}')),
+                  DataCell(Text('${monthlyRecords[i].totalDevotees}')),
+                  DataCell(Text('${monthlyRecords[i].averageDailyVisitors}')),
+                  DataCell(Text(monthlyRecords[i].peakDay)),
+                ],
+              ),
+          ],
+        );
 
-  final String label;
-  final Color color;
+      case _Period.yearly:
+        table = DataTable(
+          headingRowColor: WidgetStateProperty.all(headerBg.withOpacity(0.35)),
+          showBottomBorder: true,
+          border: TableBorder(
+            horizontalInside: BorderSide(color: border.withOpacity(0.55)),
+            bottom: BorderSide(color: border.withOpacity(0.85)),
+          ),
+          sortColumnIndex: yearlySortColumnIndex,
+          sortAscending: yearlySortAscending,
+          columns: [
+            const DataColumn(label: Text('Year')),
+            DataColumn(
+              label: const Text('Total Visitors'),
+              numeric: true,
+              onSort: (i, a) => onYearlySort(i, a),
+            ),
+            DataColumn(
+              label: const Text('Total Detections'),
+              numeric: true,
+              onSort: (i, a) => onYearlySort(i, a),
+            ),
+            const DataColumn(label: Text('Peak Month')),
+            const DataColumn(label: Text('Average Monthly Visitors')),
+          ],
+          rows: [
+            for (int i = 0; i < yearlyRecords.length; i++)
+              DataRow(
+                color: WidgetStateProperty.all(i.isOdd ? rowAlt : Colors.transparent),
+                cells: [
+                  DataCell(Text('${yearlyRecords[i].year}')),
+                  DataCell(Text('${yearlyRecords[i].totalVisitors}')),
+                  DataCell(Text('${yearlyRecords[i].totalDetections}')),
+                  DataCell(Text(yearlyRecords[i].peakMonth)),
+                  DataCell(Text('${yearlyRecords[i].averageMonthlyVisitors}')),
+                ],
+              ),
+          ],
+        );
+    }
 
-  @override
-  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.28), width: 1),
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border.withOpacity(0.9)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontWeight: FontWeight.w800,
-          color: color.withOpacity(0.95),
-          fontSize: 12,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(8),
+        scrollDirection: Axis.horizontal,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: table,
         ),
       ),
     );
   }
+}
+
+class _ThumbnailCell extends StatelessWidget {
+  const _ThumbnailCell({required this.asset, required this.onTap});
+
+  final String asset;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.asset(
+          asset,
+          width: 34,
+          height: 34,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (context, _, __) {
+            return Container(
+              width: 34,
+              height: 34,
+              color: const Color(0xFFE6D7B5).withOpacity(0.45),
+              child: Icon(
+                Icons.image_not_supported_rounded,
+                size: 18,
+                color: AppTheme.templeBrown.withOpacity(0.55),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _showImagePreview(BuildContext context, String asset, String title) async {
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      return Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8E7),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE6D7B5).withOpacity(0.9)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.templeBrown.withOpacity(0.92),
+                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(Icons.close_rounded, color: AppTheme.templeBrown.withOpacity(0.75)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  asset,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, _, __) {
+                    return SizedBox(
+                      height: 220,
+                      child: Center(
+                        child: Text(
+                          'Preview not available',
+                          style: TextStyle(color: AppTheme.templeBrown.withOpacity(0.65)),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _PaginationBar extends StatelessWidget {
@@ -944,14 +1254,10 @@ int _pageCount(int total) {
   return pages <= 0 ? 1 : pages;
 }
 
-int _compareTime(TimeOfDay a, TimeOfDay b) {
-  final ah = a.hour * 60 + a.minute;
-  final bh = b.hour * 60 + b.minute;
-  return ah.compareTo(bh);
-}
-
-String _formatDate(DateTime d) {
-  return '${d.day.toString().padLeft(2, '0')} ${_monthName(d.month)} ${d.year}';
+String _formatDateNumeric(DateTime d) {
+  final dd = d.day.toString().padLeft(2, '0');
+  final mm = d.month.toString().padLeft(2, '0');
+  return '$dd-$mm-${d.year}';
 }
 
 String _formatTime(DateTime d) {
@@ -961,110 +1267,239 @@ String _formatTime(DateTime d) {
   return '$h:$m $ap';
 }
 
-String _monthName(int m) {
-  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return names[(m - 1).clamp(0, 11)];
+String _formatTimestamp(DateTime d) {
+  final hh = d.hour.toString().padLeft(2, '0');
+  final mm = d.minute.toString().padLeft(2, '0');
+  final ss = d.second.toString().padLeft(2, '0');
+  return '${_formatDateNumeric(d)} $hh:$mm:$ss';
 }
 
-List<_DetectionRecord> _demoRecords(DateTime now) {
+List<_DailyDetectionRecord> _demoDailyRecords(DateTime now) {
   final day = DateTime(now.year, now.month, now.day);
   return [
-    _DetectionRecord(
+    _DailyDetectionRecord(
       detectionId: 'DET-1001',
-      camera: 'Temple Entrance',
+      cameraLocation: 'Temple Entrance',
+      imagePath: '/images/det_1001.jpg',
+      thumbnailAsset: 'assets/images/temple_deity.png',
       timestamp: day.add(const Duration(hours: 9, minutes: 24)),
       devoteeCount: 3,
-      status: _DetectionStatus.detected,
     ),
-    _DetectionRecord(
+    _DailyDetectionRecord(
       detectionId: 'DET-1002',
-      camera: 'Main Hall',
+      cameraLocation: 'Main Hall',
+      imagePath: '/images/det_1002.jpg',
+      thumbnailAsset: 'assets/images/temple_deity.png',
       timestamp: day.add(const Duration(hours: 10, minutes: 10)),
       devoteeCount: 1,
-      status: _DetectionStatus.detected,
     ),
-    _DetectionRecord(
+    _DailyDetectionRecord(
       detectionId: 'DET-1003',
-      camera: 'Queue Area',
+      cameraLocation: 'Queue Area',
+      imagePath: '/images/det_1003.jpg',
+      thumbnailAsset: 'assets/images/temple_deity.png',
       timestamp: day.add(const Duration(hours: 11, minutes: 42)),
       devoteeCount: 5,
-      status: _DetectionStatus.detected,
     ),
-    _DetectionRecord(
+    _DailyDetectionRecord(
       detectionId: 'DET-1004',
-      camera: 'Temple Gate',
-      timestamp: day.subtract(const Duration(days: 1)).add(const Duration(hours: 8, minutes: 55)),
+      cameraLocation: 'Temple Gate',
+      imagePath: '/images/det_1004.jpg',
+      thumbnailAsset: 'assets/images/temple_deity.png',
+      timestamp: day.add(const Duration(hours: 12, minutes: 55)),
       devoteeCount: 2,
-      status: _DetectionStatus.detected,
     ),
-    _DetectionRecord(
+    _DailyDetectionRecord(
       detectionId: 'DET-1005',
-      camera: 'Prasadam Counter',
-      timestamp: day.subtract(const Duration(days: 2)).add(const Duration(hours: 17, minutes: 5)),
+      cameraLocation: 'Prasadam Counter',
+      imagePath: '/images/det_1005.jpg',
+      thumbnailAsset: 'assets/images/temple_deity.png',
+      timestamp: day.add(const Duration(hours: 14, minutes: 5)),
       devoteeCount: 4,
-      status: _DetectionStatus.detected,
     ),
-    _DetectionRecord(
+    _DailyDetectionRecord(
       detectionId: 'DET-1006',
-      camera: 'Temple Entrance',
-      timestamp: day.subtract(const Duration(days: 3)).add(const Duration(hours: 6, minutes: 35)),
+      cameraLocation: 'Temple Entrance',
+      imagePath: '/images/det_1006.jpg',
+      thumbnailAsset: 'assets/images/temple_deity.png',
+      timestamp: day.add(const Duration(hours: 16, minutes: 35)),
       devoteeCount: 2,
-      status: _DetectionStatus.detected,
     ),
-    _DetectionRecord(
+    _DailyDetectionRecord(
       detectionId: 'DET-1007',
-      camera: 'Main Hall',
-      timestamp: day.subtract(const Duration(days: 4)).add(const Duration(hours: 12, minutes: 15)),
+      cameraLocation: 'Main Hall',
+      imagePath: '/images/det_1007.jpg',
+      thumbnailAsset: 'assets/images/temple_deity.png',
+      timestamp: day.add(const Duration(hours: 17, minutes: 15)),
       devoteeCount: 6,
-      status: _DetectionStatus.detected,
     ),
-    _DetectionRecord(
+    _DailyDetectionRecord(
       detectionId: 'DET-1008',
-      camera: 'Queue Area',
-      timestamp: day.subtract(const Duration(days: 5)).add(const Duration(hours: 19, minutes: 42)),
+      cameraLocation: 'Queue Area',
+      imagePath: '/images/det_1008.jpg',
+      thumbnailAsset: 'assets/images/temple_deity.png',
+      timestamp: day.add(const Duration(hours: 18, minutes: 42)),
       devoteeCount: 1,
-      status: _DetectionStatus.detected,
     ),
-    _DetectionRecord(
+    _DailyDetectionRecord(
       detectionId: 'DET-1009',
-      camera: 'Temple Gate',
-      timestamp: day.subtract(const Duration(days: 6)).add(const Duration(hours: 7, minutes: 12)),
+      cameraLocation: 'Temple Gate',
+      imagePath: '/images/det_1009.jpg',
+      thumbnailAsset: 'assets/images/temple_deity.png',
+      timestamp: day.add(const Duration(hours: 19, minutes: 12)),
       devoteeCount: 3,
-      status: _DetectionStatus.detected,
     ),
-    _DetectionRecord(
+    _DailyDetectionRecord(
       detectionId: 'DET-1010',
-      camera: 'Prasadam Counter',
-      timestamp: day.subtract(const Duration(days: 7)).add(const Duration(hours: 15, minutes: 28)),
+      cameraLocation: 'Prasadam Counter',
+      imagePath: '/images/det_1010.jpg',
+      thumbnailAsset: 'assets/images/temple_deity.png',
+      timestamp: day.add(const Duration(hours: 20, minutes: 28)),
       devoteeCount: 2,
-      status: _DetectionStatus.detected,
     ),
   ];
 }
 
-class _DetectionRecord {
-  const _DetectionRecord({
+List<_WeeklySummaryRecord> _demoWeeklyRecords(DateTime now) {
+  return const [
+    _WeeklySummaryRecord(
+      weekNumber: 1,
+      totalDetections: 120,
+      totalDevotees: 332,
+      peakDay: 'Saturday',
+      averageVisitors: 47,
+    ),
+    _WeeklySummaryRecord(
+      weekNumber: 2,
+      totalDetections: 142,
+      totalDevotees: 398,
+      peakDay: 'Saturday',
+      averageVisitors: 57,
+    ),
+    _WeeklySummaryRecord(
+      weekNumber: 3,
+      totalDetections: 131,
+      totalDevotees: 366,
+      peakDay: 'Sunday',
+      averageVisitors: 52,
+    ),
+    _WeeklySummaryRecord(
+      weekNumber: 4,
+      totalDetections: 127,
+      totalDevotees: 350,
+      peakDay: 'Friday',
+      averageVisitors: 50,
+    ),
+  ];
+}
+
+List<_MonthlySummaryRecord> _demoMonthlyRecords(DateTime now) {
+  return const [
+    _MonthlySummaryRecord(
+      month: 'January',
+      totalDetections: 410,
+      totalDevotees: 2140,
+      averageDailyVisitors: 69,
+      peakDay: 'Saturday',
+    ),
+    _MonthlySummaryRecord(
+      month: 'February',
+      totalDetections: 455,
+      totalDevotees: 2510,
+      averageDailyVisitors: 84,
+      peakDay: 'Sunday',
+    ),
+    _MonthlySummaryRecord(
+      month: 'March',
+      totalDetections: 520,
+      totalDevotees: 2840,
+      averageDailyVisitors: 92,
+      peakDay: 'Saturday',
+    ),
+  ];
+}
+
+List<_YearlySummaryRecord> _demoYearlyRecords(DateTime now) {
+  return const [
+    _YearlySummaryRecord(
+      year: 2025,
+      totalVisitors: 68420,
+      totalDetections: 6120,
+      peakMonth: 'August',
+      averageMonthlyVisitors: 5701,
+    ),
+    _YearlySummaryRecord(
+      year: 2026,
+      totalVisitors: 72410,
+      totalDetections: 6532,
+      peakMonth: 'July',
+      averageMonthlyVisitors: 6034,
+    ),
+  ];
+}
+
+class _DailyDetectionRecord {
+  const _DailyDetectionRecord({
     required this.detectionId,
-    required this.camera,
+    required this.cameraLocation,
+    required this.imagePath,
+    required this.thumbnailAsset,
     required this.timestamp,
     required this.devoteeCount,
-    required this.status,
   });
 
   final String detectionId;
-  final String camera;
+  final String cameraLocation;
+  final String imagePath;
+  final String thumbnailAsset;
   final DateTime timestamp;
   final int devoteeCount;
-  final _DetectionStatus status;
 }
 
-enum _DetectionStatus { detected }
+class _WeeklySummaryRecord {
+  const _WeeklySummaryRecord({
+    required this.weekNumber,
+    required this.totalDetections,
+    required this.totalDevotees,
+    required this.peakDay,
+    required this.averageVisitors,
+  });
 
-extension on _DetectionStatus {
-  String get label {
-    switch (this) {
-      case _DetectionStatus.detected:
-        return 'Detected';
-    }
-  }
+  final int weekNumber;
+  final int totalDetections;
+  final int totalDevotees;
+  final String peakDay;
+  final int averageVisitors;
+}
+
+class _MonthlySummaryRecord {
+  const _MonthlySummaryRecord({
+    required this.month,
+    required this.totalDetections,
+    required this.totalDevotees,
+    required this.averageDailyVisitors,
+    required this.peakDay,
+  });
+
+  final String month;
+  final int totalDetections;
+  final int totalDevotees;
+  final int averageDailyVisitors;
+  final String peakDay;
+}
+
+class _YearlySummaryRecord {
+  const _YearlySummaryRecord({
+    required this.year,
+    required this.totalVisitors,
+    required this.totalDetections,
+    required this.peakMonth,
+    required this.averageMonthlyVisitors,
+  });
+
+  final int year;
+  final int totalVisitors;
+  final int totalDetections;
+  final String peakMonth;
+  final int averageMonthlyVisitors;
 }

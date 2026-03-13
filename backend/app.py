@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 
-# Configure CORS
-CORS(app, origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(','))
+# Configure CORS - Allow all origins for development
+CORS(app, origins="*")
 
 # Configuration
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -253,6 +253,151 @@ def get_bucket_info():
         
     except Exception as e:
         logger.error(f"Get bucket info failed: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# Person Management Endpoints
+@app.route('/api/persons', methods=['POST'])
+def add_person():
+    """Add a new person entry."""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data or not data.get('person_name') or not data.get('image_url'):
+            return jsonify({
+                "success": False,
+                "error": "Missing required fields: person_name, image_url"
+            }), 400
+        
+        person_name = data.get('person_name')
+        image_url = data.get('image_url')
+        s3_key = data.get('s3_key')
+        face_confidence = data.get('face_confidence')
+        
+        # In a real implementation, you would save this to a database
+        # For now, we'll just return success
+        logger.info(f"Adding person: {person_name}")
+        
+        return jsonify({
+            "success": True,
+            "message": "Person added successfully",
+            "person_id": 1  # Mock ID
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Add person failed: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/persons', methods=['GET'])
+def get_persons():
+    """Get all persons or filter by person name."""
+    try:
+        person_name = request.args.get('person_name')
+        limit = int(request.args.get('limit', 100))
+        
+        # In a real implementation, you would query a database
+        # For now, return empty list
+        logger.info(f"Getting persons: name={person_name}, limit={limit}")
+        
+        return jsonify({
+            "success": True,
+            "persons": []  # Mock empty list
+        })
+        
+    except Exception as e:
+        logger.error(f"Get persons failed: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/persons/unique', methods=['GET'])
+def get_unique_persons():
+    """Get unique person names."""
+    try:
+        # In a real implementation, you would query a database
+        # For now, return empty list
+        logger.info("Getting unique persons")
+        
+        return jsonify({
+            "success": True,
+            "persons": []  # Mock empty list
+        })
+        
+    except Exception as e:
+        logger.error(f"Get unique persons failed: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/persons/recent', methods=['GET'])
+def get_recent_captures():
+    """Get recent person captures within specified hours."""
+    try:
+        hours = int(request.args.get('hours', 24))
+        
+        # In a real implementation, you would query a database
+        # For now, return empty list
+        logger.info(f"Getting recent captures: hours={hours}")
+        
+        return jsonify({
+            "success": True,
+            "persons": []  # Mock empty list
+        })
+        
+    except Exception as e:
+        logger.error(f"Get recent captures failed: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/persons/<int:entry_id>', methods=['DELETE'])
+def delete_person_entry(entry_id):
+    """Delete a person entry by ID."""
+    try:
+        # In a real implementation, you would delete from database
+        # For now, just return success
+        logger.info(f"Deleting person entry: {entry_id}")
+        
+        return jsonify({
+            "success": True,
+            "message": "Person entry deleted successfully"
+        })
+        
+    except Exception as e:
+        logger.error(f"Delete person entry failed: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/persons/stats', methods=['GET'])
+def get_person_stats():
+    """Get person statistics."""
+    try:
+        # In a real implementation, you would calculate from database
+        # For now, return mock stats
+        logger.info("Getting person stats")
+        
+        return jsonify({
+            "success": True,
+            "stats": {
+                "total_persons": 0,
+                "total_captures": 0,
+                "unique_persons": 0
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Get person stats failed: {e}")
         return jsonify({
             "success": False,
             "error": str(e)

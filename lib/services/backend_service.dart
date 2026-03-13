@@ -57,6 +57,8 @@ class BackendService {
   
   static Future<Map<String, dynamic>> uploadImage(File imageFile, {String? folder}) async {
     try {
+      print('Starting image upload: ${imageFile.path}, folder: ${folder ?? "default"}');
+      
       final request = http.MultipartRequest(
         'POST',
         Uri.parse('$baseUrl/api/upload/image'),
@@ -70,8 +72,13 @@ class BackendService {
         request.fields['folder'] = folder;
       }
       
+      print('Sending upload request to: ${request.url}');
+      
       final response = await request.send();
       final responseData = await response.stream.bytesToString();
+      
+      print('Upload response status: ${response.statusCode}');
+      print('Upload response data: $responseData');
       
       return json.decode(responseData);
     } catch (e) {

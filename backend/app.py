@@ -7,6 +7,7 @@ from PIL import Image
 import io
 import logging
 from aws_s3_service import s3_service
+from database import db_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -261,7 +262,7 @@ def get_bucket_info():
 # Person Management Endpoints
 @app.route('/api/persons', methods=['POST'])
 def add_person():
-    """Add a new person entry."""
+    """Add a new person entry - routes to pass_in or pass_out table based on first-time detection."""
     try:
         data = request.get_json()
         
@@ -277,14 +278,37 @@ def add_person():
         s3_key = data.get('s3_key')
         face_confidence = data.get('face_confidence')
         
-        # In a real implementation, you would save this to a database
-        # For now, we'll just return success
-        logger.info(f"Adding person: {person_name}")
+        # Check if person exists in pass_in table
+        person_exists = db_manager.check_person_exists(person_name)
+        
+        if person_exists:
+            # Person exists, add to pass_out table
+            entry_id = db_manager.add_pass_out_entry(
+                person_name=person_name,
+                image_url=image_url,
+                s3_key=s3_key,
+                face_confidence=face_confidence
+            )
+            entry_type = "pass_out"
+            message = f"Person '{person_name}' pass_out recorded successfully"
+        else:
+            # First time, add to pass_in table
+            entry_id = db_manager.add_pass_in_entry(
+                person_name=person_name,
+                image_url=image_url,
+                s3_key=s3_key,
+                face_confidence=face_confidence
+            )
+            entry_type = "pass_in"
+            message = f"Person '{person_name}' first-time entry recorded successfully"
+        
+        logger.info(f"Added {entry_type} entry for {person_name} with ID: {entry_id}")
         
         return jsonify({
             "success": True,
-            "message": "Person added successfully",
-            "person_id": 1  # Mock ID
+            "message": message,
+            "person_id": entry_id,
+            "entry_type": entry_type
         }), 201
         
     except Exception as e:

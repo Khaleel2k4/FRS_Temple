@@ -136,6 +136,107 @@ class PersonService {
     }
   }
 
+  static Future<Map<String, dynamic>> checkPersonExists(String personName) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/persons/exists?person_name=$personName')
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'exists': data['exists'] ?? false
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'Failed to check person exists: ${response.statusCode}'
+        };
+      }
+    } catch (e) {
+      developer.log('Error checking person exists: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> addPassInEntry({
+    required String personName,
+    required String imageUrl,
+    String? s3Key,
+    double? faceConfidence,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/persons/pass-in'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'person_name': personName,
+          'image_url': imageUrl,
+          's3_key': s3Key,
+          'face_confidence': faceConfidence,
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'entry_id': data['entry_id'],
+          'message': 'Pass-in entry added successfully'
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'Failed to add pass-in entry: ${response.statusCode}'
+        };
+      }
+    } catch (e) {
+      developer.log('Error adding pass-in entry: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> addPassOutEntry({
+    required String personName,
+    required String imageUrl,
+    String? s3Key,
+    double? faceConfidence,
+    int? passInEntryId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/persons/pass-out'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'person_name': personName,
+          'image_url': imageUrl,
+          's3_key': s3Key,
+          'face_confidence': faceConfidence,
+          'pass_in_entry_id': passInEntryId,
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'entry_id': data['entry_id'],
+          're_entry_count': data['re_entry_count'],
+          'message': 'Pass-out entry added successfully'
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'Failed to add pass-out entry: ${response.statusCode}'
+        };
+      }
+    } catch (e) {
+      developer.log('Error adding pass-out entry: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   static Future<Map<String, dynamic>> getPersonStats() async {
     try {
       final response = await http.get(Uri.parse('$_baseUrl/persons/stats'));

@@ -286,13 +286,13 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
         debugPrint('Showing success dialog');
         _showSuccessDialog('Person "$personName" captured successfully at ${distance.toStringAsFixed(2)}m!');
         
-        debugPrint('Entry type: ${result?['entry_type']}');
-        debugPrint('Re-entry count from result: ${result?['re_entry_count']}');
+        debugPrint('Entry type: ${result['entry_type']}');
+        debugPrint('Re-entry count from result: ${result['re_entry_count']}');
         debugPrint('Current re-entry count before update: $_reEntryCount');
         
         // Update re-entry count if this was a re-entry
-        if (result?['entry_type'] == 're_entry') {
-          final newCount = result?['re_entry_count'] ?? _reEntryCount + 1;
+        if (result['entry_type'] == 're_entry') {
+          final newCount = result['re_entry_count'] ?? _reEntryCount + 1;
           debugPrint('Setting re-entry count to: $newCount');
           setState(() {
             _reEntryCount = newCount;

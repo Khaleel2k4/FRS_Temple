@@ -21,7 +21,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
   bool _isCapturing = false;
   bool _isProcessingCapture = false;
   int _detectedFaces = 0;
-  File? _lastCapturedImage;
+  double? _estimatedDistance;
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
       enableClassification: true,
@@ -34,6 +34,29 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
   );
 
   Timer? _detectionTimer;
+
+  // Distance estimation constants (these may need calibration)
+  static const double _knownFaceWidth = 14.0; // Average face width in cm
+  static const double _focalLength = 500.0; // Approximate focal length for mobile camera
+
+  double _estimateDistance(Face face) {
+    try {
+      // Get face bounding box width in pixels
+      final faceWidth = face.boundingBox.width;
+      
+      // Simple distance estimation formula
+      // Distance = (Known Width * Focal Length) / Perceived Width
+      final distance = (_knownFaceWidth * _focalLength) / faceWidth;
+      
+      // Convert to meters and add some calibration factor
+      final calibratedDistance = (distance / 100) * 0.8; // Calibration factor
+      
+      return calibratedDistance;
+    } catch (e) {
+      developer.log('Error estimating distance: $e');
+      return double.infinity; // Return infinity instead of null
+    }
+  }
 
   @override
   void initState() {
@@ -77,6 +100,12 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
       if (mounted) {
         setState(() {
           _isCameraInitialized = true;
+        });
+        // Auto-start detection for CCTV-like behavior with small delay
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          if (mounted && _cameraController != null && _cameraController!.value.isInitialized) {
+            _startDetection();
+          }
         });
       }
       
@@ -128,20 +157,34 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
           final faces = await _faceDetector.processImage(inputImage);
           debugPrint('Faces detected: ${faces.length}');
           
+          double? closestDistance;
+          
+          // Find the closest face
+          for (final face in faces) {
+            final distance = _estimateDistance(face);
+            if (distance != double.infinity && (closestDistance == null || distance < closestDistance)) {
+              closestDistance = distance;
+            }
+          }
+          
           if (mounted) {
             setState(() {
               _detectedFaces = faces.length;
+              _estimatedDistance = closestDistance;
             });
           }
 
           debugPrint('Face detection complete: ${faces.length} faces detected');
+          debugPrint('Closest face distance: ${closestDistance?.toStringAsFixed(2)}m');
           debugPrint('Is capturing: $_isCapturing, Is processing: $_isProcessingCapture');
 
-          if (faces.isNotEmpty && !_isCapturing) {
-            debugPrint('Triggering auto capture for ${faces.length} faces');
-            await _autoCaptureAndStore(image, faces.length);
+          if (faces.isNotEmpty && !_isCapturing && closestDistance != null && closestDistance <= 0.50) {
+            debugPrint('Triggering auto capture for closest face at ${closestDistance.toStringAsFixed(2)}m');
+            await _smartAutoCaptureAndStore(image, faces.length, closestDistance);
+          } else if (faces.isNotEmpty && closestDistance != null && closestDistance > 0.50) {
+            debugPrint('Face detected but too far: ${closestDistance.toStringAsFixed(2)}m > 0.50m');
           } else {
-            debugPrint('Not capturing - Faces: ${faces.isNotEmpty}, Capturing: $_isCapturing');
+            debugPrint('Not capturing - Faces: ${faces.isNotEmpty}, Distance: ${closestDistance?.toStringAsFixed(2)}m, Capturing: $_isCapturing');
           }
         } catch (e) {
           if (e.toString().contains('ImageFormat is not supported')) {
@@ -180,39 +223,29 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
     });
   }
 
-  void _stopDetection() {
-    _detectionTimer?.cancel();
-    
-    setState(() {
-      _isDetectionActive = false;
-      _isProcessingCapture = false;
-      _detectedFaces = 0;
-    });
-  }
-
-  Future<void> _autoCaptureAndStore(XFile image, int faceCount) async {
-    debugPrint('Auto capture called with faceCount: $faceCount');
+  Future<void> _smartAutoCaptureAndStore(XFile image, int faceCount, double distance) async {
+    debugPrint('Smart auto capture called with faceCount: $faceCount, distance: ${distance.toStringAsFixed(2)}m');
     debugPrint('Current state - Capturing: $_isCapturing, Processing: $_isProcessingCapture');
     
     if (_isCapturing) {
-      debugPrint('Auto capture blocked - already capturing');
+      debugPrint('Smart auto capture blocked - already capturing');
       return;
     }
     
-    debugPrint('Starting auto capture process');
+    debugPrint('Starting smart auto capture process');
     
     _detectionTimer?.cancel();
     
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final autoName = 'Person_${timestamp}_F$faceCount';
+    final autoName = 'Person_${timestamp}_F${faceCount}_D${distance.toStringAsFixed(2)}m';
     
-    debugPrint('Generated auto name: $autoName');
+    debugPrint('Generated smart auto name: $autoName');
     
-    await _captureAndStorePerson(image, autoName);
+    await _smartCaptureAndStorePerson(image, autoName, distance);
   }
 
-  Future<void> _captureAndStorePerson(XFile image, String personName) async {
-    debugPrint('Capture and store called for: $personName');
+  Future<void> _smartCaptureAndStorePerson(XFile image, String personName, double distance) async {
+    debugPrint('Smart capture and store called for: $personName at ${distance.toStringAsFixed(2)}m');
     
     setState(() {
       _isCapturing = true;
@@ -232,34 +265,31 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
         return;
       }
 
-      debugPrint('Starting person capture and store process');
+      debugPrint('Starting smart person capture and store process');
       String? imageUrl;
       if (mounted) {
-        imageUrl = await PersonHelper.captureAndStorePerson(
+        imageUrl = await PersonHelper.smartCaptureAndStorePerson(
           imageFile: imageFile,
           personName: personName,
           context: context,
+          estimatedDistance: distance,
         );
       }
 
-      debugPrint('Upload result: $imageUrl');
+      debugPrint('Smart upload result: $imageUrl');
       
       if (imageUrl != null && mounted) {
         debugPrint('Showing success dialog');
-        _showSuccessDialog('Person "$personName" captured and stored successfully in S3 bucket!');
-        
-        setState(() {
-          _lastCapturedImage = imageFile;
-        });
+        _showSuccessDialog('Person "$personName" captured successfully at ${distance.toStringAsFixed(2)}m!');
       }
     } catch (e) {
-      debugPrint('Error in capture and store: $e');
-      developer.log('Error capturing and storing person: $e');
+      debugPrint('Error in smart capture and store: $e');
+      developer.log('Error smart capturing and storing person: $e');
       if (mounted) {
         _showErrorDialog('Failed to store person: ${e.toString()}');
       }
     } finally {
-      debugPrint('Capture and store process completed');
+      debugPrint('Smart capture and store process completed');
       setState(() {
         _isCapturing = false;
       });
@@ -371,247 +401,11 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
     }
   }
 
-  Future<void> _tryDifferentCamera() async {
-    try {
-      debugPrint('Trying different camera...');
-      
-      await _cameraController?.dispose();
-      _cameraController = null;
-      
-      setState(() {
-        _isCameraInitialized = false;
-      });
-      
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) return;
-      
-      final targetCamera = cameras.firstWhere(
-        (camera) => camera.lensDirection == CameraLensDirection.front,
-        orElse: () => cameras.length > 1 ? cameras[1] : cameras.first,
-      );
-      
-      _cameraController = CameraController(
-        targetCamera,
-        ResolutionPreset.high,
-        enableAudio: false,
-      );
-      
-      await _cameraController!.initialize();
-      
-      if (mounted) {
-        setState(() {
-          _isCameraInitialized = true;
-        });
-      }
-      
-      debugPrint('Camera reinitialized with YUV420 format');
-    } catch (e) {
-      debugPrint('Failed to reinitialize with different format: $e');
-      await _initializeCamera();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF01A1A2),
-      appBar: AppBar(
-        title: const Text('Face Detection', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF424242),
-        elevation: 0,
-        centerTitle: true,
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF01A1A2),
-              Color(0xFF16213E),
-              Color(0xFF0F3460),
-            ],
-          ),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              flex: 3,
-              child: Container(
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    width: 1,
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: _buildCameraPreview(),
-                ),
-              ),
-            ),
-            
-            Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFF424242),
-                                Color(0xFF6366F1),
-                                Color(0xFF9333EA),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Color(0xFFFFD27D).withValues(alpha: 0.18),
-                                blurRadius: 30,
-                                spreadRadius: 0.8,
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            children: [
-                              Text(
-                                'Face Detection Status',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.face_rounded,
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                    size: 24,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    '$_detectedFaces faces detected',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.9),
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            padding: EdgeInsets.zero,
-                          ),
-                          onPressed: _isDetectionActive ? _stopDetection : _startDetection,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                _isDetectionActive ? Icons.stop_rounded : Icons.play_arrow_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _isDetectionActive ? 'Detection Active' : 'Start Detection',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFF424242),
-                                Color(0xFF6366F1),
-                                Color(0xFF9333EA),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Color(0xFFFFD27D).withValues(alpha: 0.28),
-                                blurRadius: 22,
-                                offset: const Offset(0, 12),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.face,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Faces Detected: $_detectedFaces',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+      backgroundColor: Colors.black,
+      body: _buildCameraPreview(),
     );
   }
 
@@ -633,37 +427,233 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
     }
     
     return Stack(
+      fit: StackFit.expand,
       children: [
-        Center(
-          child: CameraPreview(_cameraController!),
+        CameraPreview(_cameraController!),
+        
+        // CCTV overlay elements
+        Positioned.fill(
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Colors.red.withValues(alpha: 0.3),
+                width: 2,
+              ),
+            ),
+          ),
         ),
+        
+        // Corner brackets
+        Positioned(
+          top: 20,
+          left: 20,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Colors.red, width: 3),
+                left: BorderSide(color: Colors.red, width: 3),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 20,
+          right: 20,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Colors.red, width: 3),
+                right: BorderSide(color: Colors.red, width: 3),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 20,
+          left: 20,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Colors.red, width: 3),
+                left: BorderSide(color: Colors.red, width: 3),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 20,
+          right: 20,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Colors.red, width: 3),
+                right: BorderSide(color: Colors.red, width: 3),
+              ),
+            ),
+          ),
+        ),
+        
+        // Recording indicator
+        Positioned(
+          top: 30,
+          left: 70,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.circle, color: Colors.white, size: 8),
+                SizedBox(width: 8),
+                Text(
+                  'REC',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        
+        // Timestamp
+        Positioned(
+          top: 30,
+          right: 70,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: StreamBuilder(
+              stream: Stream.periodic(const Duration(seconds: 1)),
+              builder: (context, snapshot) {
+                final now = DateTime.now();
+                return Text(
+                  now.toString().substring(0, 19),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        
+        // Face detection indicator
         if (_isDetectionActive)
           Positioned(
-            top: 16,
-            right: 16,
+            bottom: 30,
+            left: 70,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(20),
+                color: _estimatedDistance != null && _estimatedDistance! <= 0.50
+                    ? Colors.green.withValues(alpha: 0.8)
+                    : Colors.orange.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(4),
               ),
-              child: const Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.circle, color: Colors.white, size: 8),
-                  SizedBox(width: 8),
                   Text(
-                    'LIVE',
-                    style: TextStyle(
+                    'Faces: $_detectedFaces',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
                   ),
+                  if (_estimatedDistance != null)
+                    Text(
+                      'Distance: ${_estimatedDistance!.toStringAsFixed(2)}m',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                      ),
+                    ),
                 ],
               ),
             ),
           ),
+        
+        // Distance range indicator
+        Positioned(
+          bottom: 80,
+          left: 70,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _estimatedDistance != null && _estimatedDistance! <= 0.50
+                  ? Colors.green.withValues(alpha: 0.9)
+                  : Colors.red.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _estimatedDistance != null && _estimatedDistance! <= 0.50
+                      ? Icons.check_circle
+                      : Icons.warning,
+                  color: Colors.white,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _estimatedDistance != null && _estimatedDistance! <= 0.50
+                      ? 'IN RANGE (≤0.50m)'
+                      : 'OUT OF RANGE (>0.50m)',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        
+        // Status indicator
+        Positioned(
+          bottom: 30,
+          right: 70,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _isDetectionActive ? 
+                Colors.green.withValues(alpha: 0.8) : 
+                Colors.orange.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              _isDetectionActive ? 'MONITORING' : 'STANDBY',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }

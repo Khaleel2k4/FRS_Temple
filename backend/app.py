@@ -282,15 +282,17 @@ def add_person():
         person_exists = db_manager.check_person_exists(person_name)
         
         if person_exists:
-            # Person exists, add to pass_out table
-            entry_id = db_manager.add_pass_out_entry(
+            # Person exists, add to re_entry table
+            entry_id = db_manager.add_re_entry(
                 person_name=person_name,
                 image_url=image_url,
                 s3_key=s3_key,
                 face_confidence=face_confidence
             )
-            entry_type = "pass_out"
-            message = f"Person '{person_name}' pass_out recorded successfully"
+            entry_type = "re_entry"
+            message = f"Person '{person_name}' re-entry recorded successfully"
+            # Get re-entry count for this person today
+            re_entry_count = db_manager.get_re_entry_count(person_name)
         else:
             # First time, add to pass_in table
             entry_id = db_manager.add_pass_in_entry(
@@ -301,6 +303,7 @@ def add_person():
             )
             entry_type = "pass_in"
             message = f"Person '{person_name}' first-time entry recorded successfully"
+            re_entry_count = 0
         
         logger.info(f"Added {entry_type} entry for {person_name} with ID: {entry_id}")
         
@@ -308,7 +311,8 @@ def add_person():
             "success": True,
             "message": message,
             "person_id": entry_id,
-            "entry_type": entry_type
+            "entry_type": entry_type,
+            "re_entry_count": re_entry_count
         }), 201
         
     except Exception as e:

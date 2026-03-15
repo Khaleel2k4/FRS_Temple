@@ -270,9 +270,9 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
       }
 
       debugPrint('Starting smart person capture and store process');
-      String? imageUrl;
+      Map<String, dynamic>? result;
       if (mounted) {
-        imageUrl = await PersonHelper.smartCaptureAndStorePerson(
+        result = await PersonHelper.smartCaptureAndStorePerson(
           imageFile: imageFile,
           personName: personName,
           context: context,
@@ -280,11 +280,27 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
         );
       }
 
-      debugPrint('Smart upload result: $imageUrl');
+      debugPrint('Smart capture result: $result');
       
-      if (imageUrl != null && mounted) {
+      if (result != null && result['success'] == true && mounted) {
         debugPrint('Showing success dialog');
         _showSuccessDialog('Person "$personName" captured successfully at ${distance.toStringAsFixed(2)}m!');
+        
+        debugPrint('Entry type: ${result?['entry_type']}');
+        debugPrint('Re-entry count from result: ${result?['re_entry_count']}');
+        debugPrint('Current re-entry count before update: $_reEntryCount');
+        
+        // Update re-entry count if this was a re-entry
+        if (result?['entry_type'] == 're_entry') {
+          final newCount = result?['re_entry_count'] ?? _reEntryCount + 1;
+          debugPrint('Setting re-entry count to: $newCount');
+          setState(() {
+            _reEntryCount = newCount;
+          });
+          debugPrint('Re-entry count after update: $_reEntryCount');
+        } else {
+          debugPrint('Not a re-entry, keeping current count: $_reEntryCount');
+        }
       }
     } catch (e) {
       debugPrint('Error in smart capture and store: $e');
@@ -623,15 +639,6 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
                         fontSize: 10,
                       ),
                     ),
-                  if (_reEntryCount > 0)
-                    Text(
-                      'Re-entries: $_reEntryCount',
-                      style: const TextStyle(
-                        color: Colors.yellow,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -675,39 +682,6 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
           ),
         ),
         
-        // Re-entry counter indicator (separate display)
-        if (_reEntryCount > 0)
-          Positioned(
-            top: 80,
-            left: 70,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.refresh,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Re-entries Today: $_reEntryCount',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        
         // Status indicator
         Positioned(
           bottom: 30,
@@ -731,9 +705,42 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
           ),
         ),
         
+        // Re-entry counter on the right side
+        if (_reEntryCount > 0)
+          Positioned(
+            bottom: 80,
+            right: 70,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.refresh,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Re-entries: $_reEntryCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        
         // Network diagnostics button
         Positioned(
-          top: 80,
+          top: 130,
           right: 20,
           child: Container(
             decoration: BoxDecoration(

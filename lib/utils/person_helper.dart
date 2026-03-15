@@ -150,7 +150,7 @@ class PersonHelper {
     }
   }
   
-  static Future<String?> smartCaptureAndStorePerson({
+  static Future<Map<String, dynamic>?> smartCaptureAndStorePerson({
     required File imageFile,
     required String personName,
     double? faceConfidence,
@@ -215,7 +215,7 @@ class PersonHelper {
         
         if (context != null && context.mounted) {
           String message;
-          if (entryType == 'pass_out') {
+          if (entryType == 're_entry') {
             message = 'Re-entry recorded for "$personName" (Count: $reEntryCount)';
           } else {
             message = 'First-time entry recorded for "$personName"';
@@ -228,7 +228,13 @@ class PersonHelper {
           );
         }
         
-        return uploadResult['file_url'];
+        // Return both imageUrl and result data
+        return {
+          'imageUrl': uploadResult['file_url'],
+          'entry_type': entryType,
+          're_entry_count': reEntryCount,
+          'success': true,
+        };
       } else {
         developer.log('Failed to add person: ${addResult['error']}');
         if (context != null && context.mounted) {

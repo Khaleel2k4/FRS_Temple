@@ -25,7 +25,14 @@ class PersonService {
       );
 
       if (response.statusCode == 201) {
-        return {'success': true, 'message': 'Person added successfully'};
+        final data = json.decode(response.body);
+        return {
+          'success': true,
+          'entry_id': data['person_id'],
+          'entry_type': data['entry_type'],
+          're_entry_count': data['re_entry_count'] ?? 0,
+          'message': data['message'] ?? 'Person added successfully'
+        };
       } else {
         return {
           'success': false,
@@ -147,6 +154,14 @@ class PersonService {
         return {
           'success': true,
           'exists': data['exists'] ?? false
+        };
+      } else if (response.statusCode == 404) {
+        // Endpoint not found, use the main POST endpoint logic instead
+        developer.log('exists endpoint not found, backend uses single POST endpoint');
+        return {
+          'success': true,
+          'exists': false, // Assume first time, let backend handle the logic
+          'note': 'Backend uses single POST endpoint for pass-in/pass-out logic'
         };
       } else {
         return {

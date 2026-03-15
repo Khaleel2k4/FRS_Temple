@@ -8,10 +8,30 @@ class BackendService {
   
   static Future<bool> testConnection() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/health'));
+      final url = '$baseUrl/health';
+      print('Testing connection to: $url');
+      print('Base URL from environment: ${Environment.backendBaseUrl}');
+      
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Connection': 'keep-alive',
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Connection timeout after 10 seconds');
+        },
+      );
+      
+      print('Backend connection test - Status: ${response.statusCode}');
+      print('Backend connection test - Body: ${response.body}');
+      
       return response.statusCode == 200;
     } catch (e) {
       print('Backend connection failed: $e');
+      print('Backend URL attempted: $baseUrl/health');
+      print('Environment backendBaseUrl: ${Environment.backendBaseUrl}');
       return false;
     }
   }
@@ -64,6 +84,7 @@ class BackendService {
         Uri.parse('$baseUrl/api/upload/image'),
       );
       
+      request.headers['Connection'] = 'keep-alive';
       request.files.add(
         await http.MultipartFile.fromPath('image', imageFile.path),
       );
@@ -74,15 +95,22 @@ class BackendService {
       
       print('Sending upload request to: ${request.url}');
       
-      final response = await request.send();
-      final responseData = await response.stream.bytesToString();
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Upload timeout after 30 seconds');
+        },
+      );
       
-      print('Upload response status: ${response.statusCode}');
+      final responseData = await streamedResponse.stream.bytesToString();
+      
+      print('Upload response status: ${streamedResponse.statusCode}');
       print('Upload response data: $responseData');
       
       return json.decode(responseData);
     } catch (e) {
       print('Image upload failed: $e');
+      print('Backend URL: $baseUrl/api/upload/image');
       return {'success': false, 'error': e.toString()};
     }
   }

@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 import '../services/backend_service.dart';
 import '../utils/person_helper.dart';
+import '../config/environment.dart';
+import '../utils/network_diagnostics.dart';
 
 class CameraDetectionScreen extends StatefulWidget {
   const CameraDetectionScreen({super.key});
@@ -22,6 +24,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
   bool _isProcessingCapture = false;
   int _detectedFaces = 0;
   double? _estimatedDistance;
+  int _reEntryCount = 0;
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
       enableClassification: true,
@@ -258,9 +261,10 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
       debugPrint('Testing backend connection');
       bool isAvailable = await BackendService.testConnection();
       if (!isAvailable) {
-        debugPrint('Backend server not available');
+        debugPrint('Backend server not available - Check network connection and server status');
+        debugPrint('Backend URL: ${Environment.backendBaseUrl}');
         if (mounted) {
-          _showErrorDialog('Backend server not available');
+          _showErrorDialog('Backend server not available. Please check:\n1. Backend server is running\n2. Network connection to 10.16.74.126:5000\n3. Firewall settings');
         }
         return;
       }
@@ -298,6 +302,36 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
         debugPrint('Resuming detection');
         _startDetection();
       }
+    }
+  }
+
+  Future<void> _runNetworkDiagnostics() async {
+    debugPrint('Running network diagnostics...');
+    
+    final results = await NetworkDiagnostics.runFullDiagnostics();
+    final formattedResults = NetworkDiagnostics.formatDiagnosticsResults(results);
+    
+    debugPrint(formattedResults);
+    
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Network Diagnostics'),
+          content: SingleChildScrollView(
+            child: Text(
+              formattedResults,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -589,6 +623,15 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
                         fontSize: 10,
                       ),
                     ),
+                  if (_reEntryCount > 0)
+                    Text(
+                      'Re-entries: $_reEntryCount',
+                      style: const TextStyle(
+                        color: Colors.yellow,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -632,6 +675,39 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
           ),
         ),
         
+        // Re-entry counter indicator (separate display)
+        if (_reEntryCount > 0)
+          Positioned(
+            top: 80,
+            left: 70,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.refresh,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Re-entries Today: $_reEntryCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        
         // Status indicator
         Positioned(
           bottom: 30,
@@ -651,6 +727,23 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen> {
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
               ),
+            ),
+          ),
+        ),
+        
+        // Network diagnostics button
+        Positioned(
+          top: 80,
+          right: 20,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: IconButton(
+              onPressed: _runNetworkDiagnostics,
+              icon: const Icon(Icons.network_check, color: Colors.white, size: 20),
+              tooltip: 'Run Network Diagnostics',
             ),
           ),
         ),

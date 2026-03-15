@@ -196,106 +196,51 @@ class PersonHelper {
       
       developer.log('Image uploaded successfully to: ${uploadResult['file_url']}');
       
-      // Check if person exists in pass_in table for today
-      final today = DateTime.now();
-      final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      // Use the simplified backend API - it handles pass-in/pass-out logic automatically
+      developer.log('Adding person to database using unified endpoint');
+      final addResult = await PersonService.addPerson(
+        personName: personName,
+        imageUrl: uploadResult['file_url'],
+        s3Key: uploadResult['object_name'],
+        faceConfidence: faceConfidence,
+      );
       
-      // Check if person exists in database
-      final existsResult = await PersonService.checkPersonExists(personName);
+      developer.log('Add person result: $addResult');
       
-      if (!existsResult['success']) {
-        developer.log('Failed to check person existence: ${existsResult['error']}');
+      if (addResult['success']) {
+        final entryType = addResult['entry_type'] ?? 'unknown';
+        final reEntryCount = addResult['re_entry_count'] ?? 0;
+        
+        developer.log('Person added successfully with entry type: $entryType');
+        
+        if (context != null && context.mounted) {
+          String message;
+          if (entryType == 'pass_out') {
+            message = 'Re-entry recorded for "$personName" (Count: $reEntryCount)';
+          } else {
+            message = 'First-time entry recorded for "$personName"';
+          }
+          
+          _showPersonSnackbar(
+            context,
+            message,
+            false,
+          );
+        }
+        
+        return uploadResult['file_url'];
+      } else {
+        developer.log('Failed to add person: ${addResult['error']}');
         if (context != null && context.mounted) {
           _showPersonSnackbar(
             context,
-            'Failed to verify person: ${existsResult['error']}',
+            'Failed to record entry: ${addResult['error']}',
             true,
           );
         }
         return null;
       }
       
-      bool personExistsToday = existsResult['exists'] ?? false;
-      String? imageUrl;
-      String entryType = '';
-      
-      if (personExistsToday) {
-        // Person exists, add to pass_out (re-entry)
-        developer.log('Person exists today, adding to pass_out (re-entry)');
-        final passOutResult = await PersonService.addPassOutEntry(
-          personName: personName,
-          imageUrl: uploadResult['file_url'],
-          s3Key: uploadResult['object_name'],
-          faceConfidence: faceConfidence,
-        );
-        
-        if (passOutResult['success']) {
-          imageUrl = uploadResult['file_url'];
-          entryType = 're-entry';
-          final reEntryCount = passOutResult['re_entry_count'] ?? 1;
-          
-          developer.log('Pass-out entry added successfully. Re-entry count: $reEntryCount');
-          
-          if (context != null && context.mounted) {
-            _showPersonSnackbar(
-              context,
-              'Re-entry recorded for "$personName" (Count: $reEntryCount)',
-              false,
-            );
-          }
-        } else {
-          developer.log('Failed to add pass-out entry: ${passOutResult['error']}');
-          if (context != null && context.mounted) {
-            _showPersonSnackbar(
-              context,
-              'Failed to record re-entry: ${passOutResult['error']}',
-              true,
-            );
-          }
-          return null;
-        }
-      } else {
-        // First time today, add to pass_in
-        developer.log('First time today, adding to pass_in');
-        final passInResult = await PersonService.addPassInEntry(
-          personName: personName,
-          imageUrl: uploadResult['file_url'],
-          s3Key: uploadResult['object_name'],
-          faceConfidence: faceConfidence,
-        );
-        
-        if (passInResult['success']) {
-          imageUrl = uploadResult['file_url'];
-          entryType = 'pass-in';
-          
-          developer.log('Pass-in entry added successfully');
-          
-          if (context != null && context.mounted) {
-            _showPersonSnackbar(
-              context,
-              'First-time entry recorded for "$personName"',
-              false,
-            );
-          }
-        } else {
-          developer.log('Failed to add pass-in entry: ${passInResult['error']}');
-          if (context != null && context.mounted) {
-            _showPersonSnackbar(
-              context,
-              'Failed to record entry: ${passInResult['error']}',
-              true,
-            );
-          }
-          return null;
-        }
-      }
-      
-      if (imageUrl != null) {
-        developer.log('Smart capture completed successfully for $personName ($entryType)');
-        return imageUrl;
-      }
-      
-      return null;
     } catch (e) {
       developer.log('Error in smartCaptureAndStorePerson: $e');
       if (context != null && context.mounted) {

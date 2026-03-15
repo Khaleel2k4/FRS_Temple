@@ -11,6 +11,7 @@ class PersonEntry {
   final DateTime captureTime;
   final DateTime createdAt;
   final String entryType;
+  final String? camera;
 
   PersonEntry({
     required this.id,
@@ -21,19 +22,101 @@ class PersonEntry {
     required this.captureTime,
     required this.createdAt,
     required this.entryType,
+    this.camera,
   });
 
   factory PersonEntry.fromJson(Map<String, dynamic> json) {
-    return PersonEntry(
-      id: json['id'],
-      personName: json['person_name'],
-      imageUrl: json['image_url'],
-      s3Key: json['s3_key'],
-      faceConfidence: json['face_confidence']?.toDouble(),
-      captureTime: DateTime.parse(json['capture_time']),
-      createdAt: DateTime.parse(json['created_at']),
-      entryType: json['entry_type'] ?? 'unknown',
-    );
+    // Extract camera from person_name if camera field is not available
+    String? camera = json['camera'];
+    if (camera == null || camera.isEmpty) {
+      final personName = json['person_name'] ?? '';
+      // Look for patterns like "F1", "F2", "F3", "F4" in the person name
+      // Updated regex to catch both "_F1_" and "_F1" patterns
+      final match = RegExp(r'_F(\d+)(?:_|$)').firstMatch(personName);
+      if (match != null) {
+        final cameraNum = match.group(1);
+        camera = 'camera$cameraNum';
+      }
+    }
+    
+    print('🔗 PersonEntry: Parsing entry - ID: ${json['id']}, Name: ${json['person_name']}, Camera: $camera');
+    
+    try {
+      // Parse RFC 1123 date format from backend manually
+      DateTime captureTime;
+      DateTime createdAt;
+      
+      // Helper function to parse RFC 1123 format
+      DateTime parseRfc1123Date(String dateString) {
+        try {
+          return DateTime.parse(dateString);
+        } catch (e) {
+          // Manual parsing for RFC 1123 format: "Sun, 15 Mar 2026 14:00:22 GMT" or "Sun, 15 Mar 2026 14:00:22"
+          final months = {
+            'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+            'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+          };
+          
+          // Remove "GMT" if present and split the date string
+          final cleanDate = dateString.replaceAll(' GMT', '').replaceAll('UTC', '');
+          final parts = cleanDate.split(' ');
+          
+          // Handle different RFC 1123 formats
+          if (parts.length >= 5) {
+            try {
+              int day, month, year, hour, minute, second;
+              
+              // Format: "Sun, 15 Mar 2026 14:00:22"
+              if (parts.length >= 6) {
+                day = int.parse(parts[1]);
+                month = months[parts[2]] ?? 1;
+                year = int.parse(parts[3]);
+                final timeParts = parts[4].split(':');
+                hour = int.parse(timeParts[0]);
+                minute = int.parse(timeParts[1]);
+                second = timeParts.length > 2 ? int.parse(timeParts[2]) : 0;
+              } else {
+                // Alternative format
+                day = int.parse(parts[0]);
+                month = months[parts[1]] ?? 1;
+                year = int.parse(parts[2]);
+                final timeParts = parts[3].split(':');
+                hour = int.parse(timeParts[0]);
+                minute = int.parse(timeParts[1]);
+                second = timeParts.length > 2 ? int.parse(timeParts[2]) : 0;
+              }
+              
+              return DateTime.utc(year, month, day, hour, minute, second);
+            } catch (parseError) {
+              // If parsing fails, try a simpler approach
+              return DateTime.tryParse(cleanDate) ?? DateTime.now();
+            }
+          }
+          
+          // Final fallback - try without any processing
+          return DateTime.tryParse(cleanDate) ?? DateTime.now();
+        }
+      }
+      
+      captureTime = parseRfc1123Date(json['capture_time']);
+      createdAt = parseRfc1123Date(json['created_at']);
+      
+      return PersonEntry(
+        id: json['id'],
+        personName: json['person_name'],
+        imageUrl: json['image_url'],
+        s3Key: json['s3_key'],
+        faceConfidence: json['face_confidence']?.toDouble(),
+        captureTime: captureTime,
+        createdAt: createdAt,
+        entryType: json['entry_type'] ?? 'unknown',
+        camera: camera,
+      );
+    } catch (e) {
+      print('🔗 PersonEntry: Error creating PersonEntry: $e');
+      print('🔗 PersonEntry: JSON data: $json');
+      rethrow;
+    }
   }
 
   Map<String, dynamic> toJson() {
@@ -46,6 +129,7 @@ class PersonEntry {
       'capture_time': captureTime.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
       'entry_type': entryType,
+      'camera': camera,
     };
   }
 }
@@ -97,27 +181,56 @@ class AdminService {
     String? personName,
     int limit = 100,
     String entryType = 'all', // 'all', 'pass_in', 're_entry'
+    String? camera,
   }) async {
     try {
       final queryParams = <String, String>{
         'limit': limit.toString(),
         if (personName != null) 'person_name': personName,
         'entry_type': entryType,
+        if (camera != null) 'camera': camera,
       };
 
       final uri = Uri.parse('$baseUrl/api/persons').replace(queryParameters: queryParams);
+      print('🔗 AdminService: Requesting $uri');
       final response = await http.get(uri).timeout(const Duration(seconds: 30));
 
+      print('🔗 AdminService: Response status: ${response.statusCode}');
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        print('🔗 AdminService: Response data keys: ${data.keys}');
+        print('🔗 AdminService: Success flag: ${data['success']}');
+        
         if (data['success'] == true) {
           final List<dynamic> personsJson = data['persons'];
-          return personsJson.map((json) => PersonEntry.fromJson(json)).toList();
+          print('🔗 AdminService: Persons array length: ${personsJson.length}');
+          
+          if (personsJson.isNotEmpty) {
+            print('🔗 AdminService: Sample person data: ${personsJson.first}');
+          }
+          
+          final persons = personsJson.map((json) {
+            try {
+              return PersonEntry.fromJson(json);
+            } catch (e) {
+              print('🔗 AdminService: Error parsing person: $e');
+              print('🔗 AdminService: Problematic JSON: $json');
+              rethrow;
+            }
+          }).toList();
+          
+          print('🔗 AdminService: Successfully parsed ${persons.length} persons');
+          return persons;
+        } else {
+          print('🔗 AdminService: API returned success=false');
         }
+      } else {
+        print('🔗 AdminService: HTTP error: ${response.statusCode}');
       }
       return [];
-    } catch (e) {
-      print('Get persons failed: $e');
+    } catch (e, stackTrace) {
+      print('🔗 AdminService: Get persons failed: $e');
+      print('🔗 AdminService: Stack trace: $stackTrace');
       return [];
     }
   }

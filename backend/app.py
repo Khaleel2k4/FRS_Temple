@@ -328,14 +328,37 @@ def get_persons():
     try:
         person_name = request.args.get('person_name')
         limit = int(request.args.get('limit', 100))
+        entry_type = request.args.get('entry_type', 'all')  # 'all', 'pass_in', 're_entry'
         
-        # In a real implementation, you would query a database
-        # For now, return empty list
-        logger.info(f"Getting persons: name={person_name}, limit={limit}")
+        logger.info(f"Getting persons: name={person_name}, limit={limit}, type={entry_type}")
+        
+        # Get data from database
+        if entry_type == 'pass_in':
+            persons = db_manager.get_all_pass_in_entries(person_name, limit)
+        elif entry_type == 're_entry':
+            persons = db_manager.get_all_re_entry_entries(person_name, limit)
+        else:
+            # Get both types
+            pass_in_entries = db_manager.get_all_pass_in_entries(person_name, limit)
+            re_entry_entries = db_manager.get_all_re_entry_entries(person_name, limit)
+            
+            # Add entry_type to each entry
+            for entry in pass_in_entries:
+                entry['entry_type'] = 'pass_in'
+            for entry in re_entry_entries:
+                entry['entry_type'] = 're_entry'
+            
+            # Combine and sort by created_at
+            persons = pass_in_entries + re_entry_entries
+            persons.sort(key=lambda x: x['created_at'], reverse=True)
+            
+            # Limit results
+            persons = persons[:limit]
         
         return jsonify({
             "success": True,
-            "persons": []  # Mock empty list
+            "persons": persons,
+            "count": len(persons)
         })
         
     except Exception as e:
@@ -349,13 +372,15 @@ def get_persons():
 def get_unique_persons():
     """Get unique person names."""
     try:
-        # In a real implementation, you would query a database
-        # For now, return empty list
         logger.info("Getting unique persons")
+        
+        # Get data from database
+        persons = db_manager.get_unique_persons()
         
         return jsonify({
             "success": True,
-            "persons": []  # Mock empty list
+            "persons": persons,
+            "count": len(persons)
         })
         
     except Exception as e:
@@ -371,13 +396,16 @@ def get_recent_captures():
     try:
         hours = int(request.args.get('hours', 24))
         
-        # In a real implementation, you would query a database
-        # For now, return empty list
         logger.info(f"Getting recent captures: hours={hours}")
+        
+        # Get data from database
+        persons = db_manager.get_recent_captures(hours)
         
         return jsonify({
             "success": True,
-            "persons": []  # Mock empty list
+            "persons": persons,
+            "count": len(persons),
+            "hours": hours
         })
         
     except Exception as e:
@@ -391,14 +419,30 @@ def get_recent_captures():
 def delete_person_entry(entry_id):
     """Delete a person entry by ID."""
     try:
-        # In a real implementation, you would delete from database
-        # For now, just return success
-        logger.info(f"Deleting person entry: {entry_id}")
+        # Get table from query parameter (default to 'pass_in')
+        table = request.args.get('table', 'pass_in')
         
-        return jsonify({
-            "success": True,
-            "message": "Person entry deleted successfully"
-        })
+        if table not in ['pass_in', 're_entry']:
+            return jsonify({
+                "success": False,
+                "error": "Invalid table. Must be 'pass_in' or 're_entry'"
+            }), 400
+        
+        logger.info(f"Deleting person entry: {entry_id} from table: {table}")
+        
+        # Delete from database
+        success = db_manager.delete_entry(entry_id, table)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": f"Person entry deleted successfully from {table} table"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Entry not found or deletion failed"
+            }), 404
         
     except Exception as e:
         logger.error(f"Delete person entry failed: {e}")
@@ -411,17 +455,14 @@ def delete_person_entry(entry_id):
 def get_person_stats():
     """Get person statistics."""
     try:
-        # In a real implementation, you would calculate from database
-        # For now, return mock stats
         logger.info("Getting person stats")
+        
+        # Get data from database
+        stats = db_manager.get_person_stats()
         
         return jsonify({
             "success": True,
-            "stats": {
-                "total_persons": 0,
-                "total_captures": 0,
-                "unique_persons": 0
-            }
+            "stats": stats
         })
         
     except Exception as e:

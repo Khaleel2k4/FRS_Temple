@@ -34,7 +34,6 @@ class _LoginScreenState extends State<LoginScreen>
 
   late final AnimationController _pageController;
   late final Animation<double> _pageFade;
-  late final Animation<Offset> _pageSlide;
 
   late final AnimationController _auraController;
   late final Animation<double> _auraPulse;
@@ -54,10 +53,6 @@ class _LoginScreenState extends State<LoginScreen>
       parent: _pageController,
       curve: Curves.easeOutCubic,
     );
-    _pageSlide = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _pageController, curve: Curves.easeOutCubic));
 
     _pageController.forward();
 

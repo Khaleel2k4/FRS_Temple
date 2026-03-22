@@ -33,7 +33,7 @@ class _ViewDataScreenState extends State<ViewDataScreen>
 
   DateTime? _endDate;
 
-  String _camera = 'All Cameras';
+  String _camera = 'all-cameras';
 
   final TextEditingController _search = TextEditingController();
 
@@ -255,7 +255,7 @@ class _ViewDataScreenState extends State<ViewDataScreen>
 
       _selectedYear = now.year;
 
-      _camera = 'All Cameras';
+      _camera = 'all-cameras';
 
       _search.clear();
 
@@ -270,7 +270,7 @@ class _ViewDataScreenState extends State<ViewDataScreen>
 
     final dailyFiltered = _dailyAll
         .where((r) {
-          if (_camera != 'All Cameras' && r.cameraLocation != _camera)
+          if (_camera != 'all-cameras' && r.cameraLocation != _camera)
             return false;
 
           if (_startDate != null && _endDate != null) {
@@ -1146,17 +1146,15 @@ class _FilterRow extends StatelessWidget {
               value: camera,
 
               options: const [
-                'All Cameras',
+                'all-cameras',
 
-                'Temple Entrance',
+                'camera-1',
 
-                'Main Hall',
+                'camera-2',
 
-                'Queue Area',
+                'camera-3',
 
-                'Temple Gate',
-
-                'Prasadam Counter',
+                'camera-4',
               ],
 
               icon: Icons.videocam_rounded,

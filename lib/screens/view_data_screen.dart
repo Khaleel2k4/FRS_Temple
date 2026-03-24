@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:developer' as developer;
 
 import '../theme/app_theme.dart';
+import '../services/person_service.dart';
+import '../services/backend_service.dart';
+import '../config/environment.dart';
 
 enum _ViewType { daily, weekly, monthly, yearly }
 
@@ -24,10 +29,16 @@ class _ViewDataScreenState extends State<ViewDataScreen> {
 
   String _camera = 'All Cameras';
 
-  late final List<_DetectionRecord> _allRecords;
+  late List<_DetectionRecord> _allRecords;
   List<_DetectionRecord> _filteredRecords = const [];
   List<_DetectionRecord> _visibleRecords = const [];
   bool _isLoadingMore = false;
+  bool _isLoading = false;
+  bool _hasError = false;
+  String _errorMessage = '';
+  DateTime? _lastUpdate;
+  
+  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -37,14 +48,20 @@ class _ViewDataScreenState extends State<ViewDataScreen> {
     _anchorDate = DateTime(now.year, now.month, now.day);
     _setRangeFromAnchor();
 
-    _allRecords = _dummyRecords();
-    _applyFilter();
+    _allRecords = [];
+    _loadRealTimeData();
+
+    // Start real-time refresh timer (every 30 seconds)
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _loadRealTimeData();
+    });
 
     _scrollController.addListener(_handleScroll);
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _scrollController.dispose();
     _search.dispose();
     super.dispose();
@@ -162,6 +179,161 @@ class _ViewDataScreenState extends State<ViewDataScreen> {
     });
   }
 
+  Future<void> _loadRealTimeData() async {
+    if (!mounted) return;
+    
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
+    });
+
+    try {
+      developer.log('Loading real-time data from backend...');
+      developer.log('Fetching from: ${Environment.backendBaseUrl}/api/persons/recent?hours=720');
+      
+      // Fetch data from backend
+      final result = await PersonService.getRecentCaptures(hours: 24 * 30); // Last 30 days
+      
+      developer.log('API Response: $result');
+      
+      if (result['success']) {
+        final List<dynamic> persons = result['persons'] ?? [];
+        developer.log('Fetched ${persons.length} records from backend');
+        
+        // Show complete raw data structure for debugging
+        if (persons.isNotEmpty) {
+          developer.log('=== COMPLETE RAW DATA STRUCTURE ===');
+          for (int i = 0; i < persons.length && i < 3; i++) {
+            developer.log('Person $i: ${persons[i]}');
+            final person = persons[i] as Map<String, dynamic>;
+            developer.log('Person $i keys: ${person.keys.toList()}');
+            developer.log('Person $i values: ${person.values.toList()}');
+          }
+          developer.log('=== END RAW DATA ===');
+        }
+        
+        final records = <_DetectionRecord>[];
+        
+        // Process each person and fetch S3 URLs if needed
+        for (int i = 0; i < persons.length; i++) {
+          final person = persons[i];
+          developer.log('Processing person ${i + 1}: $person');
+          
+          // Get the image URL from multiple possible fields
+          String imageUrl = '';
+          
+          // Priority 1: Try existing image_url (this should be the S3 URL from database)
+          if (person['image_url'] != null && person['image_url'].toString().isNotEmpty) {
+            imageUrl = person['image_url'].toString();
+            developer.log('Using image_url from database: $imageUrl');
+          }
+          // Priority 2: Try to get S3 key and generate fresh URL
+          else if (person['s3_key'] != null && person['s3_key'].toString().isNotEmpty) {
+            try {
+              // Use BackendService to get the proper S3 URL
+              final s3Url = await BackendService.getFileUrl(person['s3_key'].toString());
+              if (s3Url != null) {
+                imageUrl = s3Url;
+                developer.log('Generated fresh S3 URL for ${person['s3_key']}: $imageUrl');
+              } else {
+                developer.log('Failed to generate S3 URL for ${person['s3_key']}');
+              }
+            } catch (e) {
+              developer.log('Error getting S3 URL: $e');
+            }
+          }
+          // Priority 3: Try other possible field names
+          else if (person['image'] != null && person['image'].toString().isNotEmpty) {
+            imageUrl = person['image'].toString();
+            developer.log('Using image field: $imageUrl');
+          }
+          
+          developer.log('Final image URL for person ${person['id'] ?? 'unknown'}: "$imageUrl"');
+          
+          // If we still don't have an image URL, create a placeholder
+          if (imageUrl.isEmpty) {
+            imageUrl = 'https://via.placeholder.com/74x74/cccccc/666666?text=No+Image';
+            developer.log('No image found, using placeholder');
+          }
+          
+          // Handle multiple possible date field names and formats
+          String? dateStr = person['capture_time'] ?? person['created_at'] ?? person['date'] ?? person['timestamp'];
+          DateTime dateTime;
+          
+          if (dateStr == null || dateStr.isEmpty) {
+            developer.log('No date found, using current time');
+            dateTime = DateTime.now();
+          } else {
+            try {
+              // Try parsing as ISO format first
+              dateTime = DateTime.parse(dateStr);
+            } catch (e) {
+              developer.log('Failed to parse date "$dateStr": $e');
+              dateTime = DateTime.now();
+            }
+          }
+          
+          records.add(_DetectionRecord(
+            detectionId: person['id']?.toString() ?? 'DET-${person['id'] ?? '0000'}',
+            camera: person['person_name'] ?? person['name'] ?? 'Unknown',
+            imageAsset: imageUrl, // Use the actual S3 URL
+            dateTime: dateTime,
+            count: 1, // Each record represents one detection
+          ));
+        }
+        
+        developer.log('Processed ${records.length} records');
+        
+        if (mounted) {
+          setState(() {
+            _allRecords = records;
+            _hasError = false;
+            _isLoading = false;
+            _lastUpdate = DateTime.now();
+          });
+          _applyFilter(); // Apply current filters to new data
+        }
+      } else {
+        developer.log('API returned failure: ${result['error']}');
+        throw Exception(result['error'] ?? 'Failed to load data');
+      }
+    } catch (e) {
+      developer.log('Error loading real-time data: $e');
+      developer.log('Error type: ${e.runtimeType}');
+      developer.log('Error stack trace: ${StackTrace.current}');
+      
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _errorMessage = 'Failed to load data: ${e.toString()}';
+          _isLoading = false;
+        });
+        
+        // Show detailed error message to user
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Failed to load real-time data.'),
+                Text('Error: ${e.toString()}'),
+                const Text('Using offline data.'),
+              ],
+            ),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        
+        // Fallback to dummy data if backend fails
+        _allRecords = _dummyRecords();
+        _applyFilter();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cameras = <String>{'All Cameras', ..._allRecords.map((e) => e.camera)}
@@ -177,23 +349,41 @@ class _ViewDataScreenState extends State<ViewDataScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _Header(),
+          _Header(
+            isLoading: _isLoading,
+            lastUpdate: _lastUpdate,
+          ),
           const SizedBox(height: 12),
-          _FilterBar(
-            viewType: _viewType,
-            dateLabel: _dateLabel(_viewType),
-            dateValue: _dateValue(_viewType, _anchorDate, _startDate, _endDate),
-            cameras: cameras,
-            selectedCamera: _camera,
-            searchController: _search,
-            onViewTypeChanged: (v) {
-              setState(() {
-                _viewType = v;
-                _setRangeFromAnchor();
-              });
-            },
-            onDateTap: _pickDate,
-            onCameraChanged: (v) => setState(() => _camera = v),
+          Row(
+            children: [
+              Expanded(
+                child: _FilterBar(
+                  viewType: _viewType,
+                  dateLabel: _dateLabel(_viewType),
+                  dateValue: _dateValue(_viewType, _anchorDate, _startDate, _endDate),
+                  cameras: cameras,
+                  selectedCamera: _camera,
+                  searchController: _search,
+                  onViewTypeChanged: (v) {
+                    setState(() {
+                      _viewType = v;
+                      _setRangeFromAnchor();
+                    });
+                  },
+                  onDateTap: _pickDate,
+                  onCameraChanged: (v) => setState(() => _camera = v),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: _loadRealTimeData,
+                icon: Icon(
+                  _isLoading ? Icons.refresh : Icons.refresh,
+                  color: AppTheme.deepSaffron,
+                ),
+                tooltip: 'Refresh Data',
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           _ActionButtons(
@@ -202,22 +392,77 @@ class _ViewDataScreenState extends State<ViewDataScreen> {
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: _filteredRecords.isEmpty
-                ? const _EmptyState()
-                : ListView.separated(
-                    controller: _scrollController,
-                    itemCount: _visibleRecords.length + 1,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      if (index == _visibleRecords.length) {
-                        final hasMore =
-                            _visibleRecords.length < _filteredRecords.length;
-                        if (!hasMore) return const SizedBox(height: 6);
+            child: _isLoading
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text(
+                          'Loading real-time data...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : _hasError
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 48,
+                              color: Colors.red[400],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Failed to load data',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.red[700],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _errorMessage,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: _loadRealTimeData,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _filteredRecords.isEmpty
+                        ? const _EmptyState()
+                        : ListView.separated(
+                            controller: _scrollController,
+                            itemCount: _visibleRecords.length + 1,
+                            separatorBuilder: (_, __) => const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              if (index == _visibleRecords.length) {
+                                final hasMore =
+                                    _visibleRecords.length < _filteredRecords.length;
+                                if (!hasMore) return const SizedBox(height: 6);
 
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Center(
-                            child: SizedBox(
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  child: Center(
+                                    child: SizedBox(
                               height: 18,
                               width: 18,
                               child: CircularProgressIndicator(
@@ -246,7 +491,10 @@ class _ViewDataScreenState extends State<ViewDataScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header();
+  const _Header({required this.isLoading, required this.lastUpdate});
+
+  final bool isLoading;
+  final DateTime? lastUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -263,11 +511,51 @@ class _Header extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Devotee Detection Records', style: titleStyle),
+        Row(
+          children: [
+            Text('Devotee Detection Records', style: titleStyle),
+            if (isLoading) ...[
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppTheme.deepSaffron.withOpacity(0.8),
+                ),
+              ),
+            ] else ...[
+              const SizedBox(width: 8),
+              Icon(
+                Icons.cloud_done,
+                size: 16,
+                color: Colors.green.withOpacity(0.8),
+              ),
+            ],
+          ],
+        ),
         const SizedBox(height: 4),
-        Text('Temple Visitor Data', style: subtitleStyle),
+        Text(
+          'Temple Visitor Data${lastUpdate != null ? ' • Last updated: ${_formatTime(lastUpdate!)}' : ''}',
+          style: subtitleStyle,
+        ),
       ],
     );
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else {
+      return '${difference.inDays}d ago';
+    }
   }
 }
 
@@ -553,12 +841,7 @@ class _DetectionRecordCard extends StatelessWidget {
               onTap: onTapImage,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  record.imageAsset,
-                  height: 74,
-                  width: 74,
-                  fit: BoxFit.cover,
-                ),
+                child: _buildImage(record.imageAsset, height: 74, width: 74),
               ),
             ),
             const SizedBox(width: 12),
@@ -681,7 +964,7 @@ void _showImagePreview(BuildContext context, _DetectionRecord record) {
                   child: InteractiveViewer(
                     minScale: 1,
                     maxScale: 4,
-                    child: Image.asset(record.imageAsset, fit: BoxFit.cover),
+                    child: _buildImage(record.imageAsset, fit: BoxFit.cover),
                   ),
                 ),
               ),
@@ -763,6 +1046,96 @@ String _monthName(int month) {
     'Dec',
   ];
   return months[(month - 1).clamp(0, 11)];
+}
+
+Widget _buildImage(String imagePath, {double? height, double? width, BoxFit? fit}) {
+  developer.log('Building image for path: "$imagePath"');
+  
+  // Check if it's a network URL (http/https)
+  if (imagePath.startsWith('http')) {
+    developer.log('Loading network image: $imagePath');
+    return Image.network(
+      imagePath,
+      height: height,
+      width: width,
+      fit: fit ?? BoxFit.cover,
+      headers: {
+        // Add user-agent if needed for some S3 configurations
+        'User-Agent': 'FRS-Temple-Flutter-App/1.0',
+      },
+      errorBuilder: (context, error, stackTrace) {
+        developer.log('Network image failed to load: $error');
+        developer.log('Stack trace: $stackTrace');
+        return Container(
+          height: height,
+          width: width,
+          color: Colors.grey[300],
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.broken_image,
+                color: Colors.grey[600],
+                size: (height ?? 74) * 0.4,
+              ),
+              if (height != null && height > 50)
+                Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: Text(
+                    'Failed to load',
+                    style: TextStyle(
+                      fontSize: 8,
+                      color: Colors.grey[600],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Container(
+          height: height,
+          width: width,
+          color: Colors.grey[200],
+          child: Center(
+            child: SizedBox(
+              width: (height ?? 74) * 0.3,
+              height: (height ?? 74) * 0.3,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppTheme.deepSaffron.withOpacity(0.6),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  } else {
+    developer.log('Loading asset image: $imagePath');
+    // It's a local asset
+    return Image.asset(
+      imagePath,
+      height: height,
+      width: width,
+      fit: fit ?? BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        developer.log('Asset image failed to load: $error');
+        return Container(
+          height: height,
+          width: width,
+          color: Colors.grey[300],
+          child: Icon(
+            Icons.image_not_supported,
+            color: Colors.grey[600],
+            size: (height ?? 74) * 0.5,
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _DetectionRecord {

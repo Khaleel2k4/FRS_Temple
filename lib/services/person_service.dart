@@ -101,21 +101,38 @@ class PersonService {
     int hours = 24,
   }) async {
     try {
+      // Try the simple endpoint first (without S3 processing)
       final response = await http.get(
-        Uri.parse('$_baseUrl/persons/recent?hours=$hours')
+        Uri.parse('$_baseUrl/persons/recent-simple?hours=$hours')
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        developer.log('Simple endpoint response: $data');
         return {
           'success': true,
           'persons': data['persons'] ?? []
         };
       } else {
-        return {
-          'success': false,
-          'error': 'Failed to get recent captures: ${response.statusCode}'
-        };
+        // If simple endpoint fails, try the full endpoint
+        developer.log('Simple endpoint failed, trying full endpoint...');
+        final fullResponse = await http.get(
+          Uri.parse('$_baseUrl/persons/recent?hours=$hours')
+        );
+
+        if (fullResponse.statusCode == 200) {
+          final data = jsonDecode(fullResponse.body);
+          developer.log('Full endpoint response: $data');
+          return {
+            'success': true,
+            'persons': data['persons'] ?? []
+          };
+        } else {
+          return {
+            'success': false,
+            'error': 'Both endpoints failed. Simple: ${response.statusCode}, Full: ${fullResponse.statusCode}'
+          };
+        }
       }
     } catch (e) {
       developer.log('Error getting recent captures: $e');

@@ -408,6 +408,33 @@ def get_unique_persons():
             "error": str(e)
         }), 500
 
+@app.route('/api/persons/recent-simple', methods=['GET'])
+def get_recent_captures_simple():
+    """Get recent person captures without S3 processing (fallback endpoint)."""
+    try:
+        hours = int(request.args.get('hours', 24))
+        
+        logger.info(f"Getting recent captures (simple): hours={hours}")
+        
+        # Get data from database
+        persons = db_manager.get_recent_captures(hours)
+        logger.info(f"Retrieved {len(persons)} records from database")
+        
+        # Don't process S3 URLs - just return raw data
+        return jsonify({
+            "success": True,
+            "persons": persons,
+            "count": len(persons),
+            "hours": hours
+        })
+        
+    except Exception as e:
+        logger.error(f"Get recent captures (simple) failed: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 @app.route('/api/persons/recent', methods=['GET'])
 def get_recent_captures():
     """Get recent person captures within specified hours."""
@@ -416,8 +443,62 @@ def get_recent_captures():
         
         logger.info(f"Getting recent captures: hours={hours}")
         
+        # Check database connection
+        try:
+            test_conn = db_manager.get_connection()
+            test_conn.close()
+            logger.info("Database connection OK")
+        except Exception as db_e:
+            logger.error(f"Database connection failed: {db_e}")
+            return jsonify({
+                "success": False,
+                "error": f"Database connection failed: {str(db_e)}"
+            }), 500
+        
         # Get data from database
-        persons = db_manager.get_recent_captures(hours)
+        try:
+            persons = db_manager.get_recent_captures(hours)
+            logger.info(f"Retrieved {len(persons)} records from database")
+        except Exception as db_e:
+            logger.error(f"Database query failed: {db_e}")
+            return jsonify({
+                "success": False,
+                "error": f"Database query failed: {str(db_e)}"
+            }), 500
+        
+        # Check S3 service
+        try:
+            s3_connected = s3_service.test_connection()
+            logger.info(f"S3 connection status: {s3_connected}")
+        except Exception as s3_e:
+            logger.error(f"S3 service error: {s3_e}")
+            s3_connected = False
+        
+        # Generate presigned URLs for images
+        for i, person in enumerate(persons):
+            try:
+                logger.info(f"Processing person {i+1}: {person}")
+                
+                if person.get('s3_key'):
+                    presigned_url = s3_service.generate_presigned_url(person['s3_key'], expiration=3600)  # 1 hour
+                    if presigned_url:
+                        person['image_url'] = presigned_url
+                        logger.info(f"Generated presigned URL for {person['s3_key']}")
+                    else:
+                        person['image_url'] = ''
+                        logger.warning(f"Failed to generate presigned URL for {person['s3_key']}")
+                elif person.get('image_url'):
+                    # If it already has an image_url, keep it but log it
+                    logger.info(f"Using existing image_url: {person['image_url']}")
+                else:
+                    person['image_url'] = ''
+                    logger.warning(f"No image URL or S3 key found for person {person.get('id')}")
+                    
+            except Exception as person_e:
+                logger.error(f"Error processing person {i+1}: {person_e}")
+                person['image_url'] = ''  # Set empty URL on error
+        
+        logger.info(f"Successfully processed {len(persons)} persons")
         
         return jsonify({
             "success": True,

@@ -101,7 +101,7 @@ class PersonService {
     int hours = 24,
   }) async {
     try {
-      // Try the simple endpoint first (without S3 processing)
+      // Always use the simple endpoint first to get raw data
       final response = await http.get(
         Uri.parse('$_baseUrl/persons/recent-simple?hours=$hours')
       );
@@ -109,30 +109,41 @@ class PersonService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         developer.log('Simple endpoint response: $data');
+        
+        // Process each person to get S3 URLs
+        final persons = data['persons'] as List<dynamic>;
+        for (int i = 0; i < persons.length; i++) {
+          final person = persons[i] as Map<String, dynamic>;
+          
+          // If we have an s3_key, get a fresh presigned URL
+          if (person['s3_key'] != null && person['s3_key'].toString().isNotEmpty) {
+            try {
+              final urlResponse = await http.get(
+                Uri.parse('$_baseUrl/api/files/${person['s3_key']}/url?expiration=3600')
+              );
+              
+              if (urlResponse.statusCode == 200) {
+                final urlData = jsonDecode(urlResponse.body);
+                if (urlData['url'] != null) {
+                  person['image_url'] = urlData['url'];
+                  developer.log('Generated presigned URL for ${person['s3_key']}: ${urlData['url']}');
+                }
+              }
+            } catch (e) {
+              developer.log('Failed to get presigned URL: $e');
+            }
+          }
+        }
+        
         return {
           'success': true,
-          'persons': data['persons'] ?? []
+          'persons': persons
         };
       } else {
-        // If simple endpoint fails, try the full endpoint
-        developer.log('Simple endpoint failed, trying full endpoint...');
-        final fullResponse = await http.get(
-          Uri.parse('$_baseUrl/persons/recent?hours=$hours')
-        );
-
-        if (fullResponse.statusCode == 200) {
-          final data = jsonDecode(fullResponse.body);
-          developer.log('Full endpoint response: $data');
-          return {
-            'success': true,
-            'persons': data['persons'] ?? []
-          };
-        } else {
-          return {
-            'success': false,
-            'error': 'Both endpoints failed. Simple: ${response.statusCode}, Full: ${fullResponse.statusCode}'
-          };
-        }
+        return {
+          'success': false,
+          'error': 'Simple endpoint failed: ${response.statusCode}'
+        };
       }
     } catch (e) {
       developer.log('Error getting recent captures: $e');

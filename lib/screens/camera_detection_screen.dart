@@ -32,8 +32,8 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
       enableLandmarks: true,
       enableContours: false,
       enableTracking: true,
-      minFaceSize: 0.1,
-      performanceMode: FaceDetectorMode.fast,
+      minFaceSize: 0.05,
+      performanceMode: FaceDetectorMode.accurate,
     ),
   );
 
@@ -112,7 +112,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
 
       _cameraController = CameraController(
         frontCamera,
-        ResolutionPreset.high,
+        ResolutionPreset.medium,
         enableAudio: false,
       );
 
@@ -176,7 +176,12 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
         debugPrint('Picture taken: ${image.path}');
 
         final inputImage = InputImage.fromFilePath(image.path);
-        debugPrint('InputImage created');
+        debugPrint('InputImage created from: ${image.path}');
+
+        // Log image metadata for debugging
+        final file = File(image.path);
+        final fileSize = await file.length();
+        debugPrint('Image file size: ${fileSize} bytes');
 
         try {
           final faces = await _faceDetector.processImage(inputImage);

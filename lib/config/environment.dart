@@ -1,6 +1,6 @@
 class Environment {
   // Backend Configuration
-  static const String backendBaseUrl = 'http://10.16.74.126:5000'; // Your network IP
+  static const String backendBaseUrl = "http://192.168.1.4:5000";
   
   // App Configuration
   static const String appName = 'FRS Temple';

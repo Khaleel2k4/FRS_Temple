@@ -196,7 +196,7 @@ class PersonHelper {
       
       developer.log('Image uploaded successfully to: ${uploadResult['file_url']}');
       
-      // Use the simplified backend API - it handles pass-in/pass-out logic automatically
+      // Use the backend API - it handles daily limit logic automatically
       developer.log('Adding person to database using unified endpoint');
       final addResult = await PersonService.addPerson(
         personName: personName,
@@ -210,15 +210,23 @@ class PersonHelper {
       if (addResult['success']) {
         final entryType = addResult['entry_type'] ?? 'unknown';
         final reEntryCount = addResult['re_entry_count'] ?? 0;
+        final remainingCaptures = addResult['remaining_captures_today'] ?? 0;
         
         developer.log('Person added successfully with entry type: $entryType');
+        developer.log('Remaining captures today: $remainingCaptures');
         
         if (context != null && context.mounted) {
           String message;
           if (entryType == 're_entry') {
             message = 'Re-entry recorded for "$personName" (Count: $reEntryCount)';
+            if (remainingCaptures == 0) {
+              message += ' - Daily limit reached';
+            }
           } else {
             message = 'First-time entry recorded for "$personName"';
+            if (remainingCaptures > 0) {
+              message += ' ($remainingCaptures capture remaining today)';
+            }
           }
           
           _showPersonSnackbar(
@@ -233,17 +241,31 @@ class PersonHelper {
           'imageUrl': uploadResult['file_url'],
           'entry_type': entryType,
           're_entry_count': reEntryCount,
+          'remaining_captures_today': remainingCaptures,
           'success': true,
         };
       } else {
         developer.log('Failed to add person: ${addResult['error']}');
-        if (context != null && context.mounted) {
-          _showPersonSnackbar(
-            context,
-            'Failed to record entry: ${addResult['error']}',
-            true,
-          );
+        
+        // Handle daily limit reached specifically
+        if (addResult['daily_limit_reached'] == true) {
+          if (context != null && context.mounted) {
+            _showPersonSnackbar(
+              context,
+              'Daily limit reached for "$personName". Maximum 2 captures per day allowed.',
+              true,
+            );
+          }
+        } else {
+          if (context != null && context.mounted) {
+            _showPersonSnackbar(
+              context,
+              'Failed to record entry: ${addResult['error']}',
+              true,
+            );
+          }
         }
+        
         return null;
       }
       

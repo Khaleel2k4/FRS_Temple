@@ -26,6 +26,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
   int _detectedFaces = 0;
   double? _estimatedDistance;
   int _reEntryCount = 0;
+  int _remainingCapturesToday = 2; // Default to 2 captures per day
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
       enableClassification: true,
@@ -210,7 +211,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
             });
           }
 
-          debugPrint('Face detection complete: ${faces.length} faces detected');
+          debugPrint('Face detection complete: $faces.length faces detected');
           debugPrint(
             'Closest face distance: ${closestDistance?.toStringAsFixed(2)}m',
           );
@@ -372,6 +373,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
 
         debugPrint('Entry type: ${result['entry_type']}');
         debugPrint('Re-entry count from result: ${result['re_entry_count']}');
+        debugPrint('Remaining captures today: ${result['remaining_captures_today']}');
         debugPrint('Current re-entry count before update: $_reEntryCount');
 
         // Update re-entry count if this was a re-entry
@@ -380,11 +382,18 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
           debugPrint('Setting re-entry count to: $newCount');
           setState(() {
             _reEntryCount = newCount;
+            _remainingCapturesToday = result?['remaining_captures_today'] ?? 0;
           });
           debugPrint('Re-entry count after update: $_reEntryCount');
         } else {
           debugPrint('Not a re-entry, keeping current count: $_reEntryCount');
+          setState(() {
+            _remainingCapturesToday = result?['remaining_captures_today'] ?? 1;
+          });
         }
+      } else if (result != null && result['daily_limit_reached'] == true && mounted) {
+        debugPrint('Daily limit reached for person');
+        // Don't show any dialog, just log it - the person helper already shows the snackbar
       }
     } catch (e) {
       debugPrint('Error in smart capture and store: $e');
@@ -437,21 +446,21 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
     }
   }
 
-  void _showSuccessDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Success'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
+  // void _showSuccessDialog(String message) {
+  //   showDialog(
+  //     context: context,
+  //     builder: (context) => AlertDialog(
+  //       title: const Text('Success'),
+  //       content: Text(message),
+  //       actions: [
+  //         TextButton(
+  //           onPressed: () => Navigator.of(context).pop(),
+  //           child: const Text('OK'),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   void _showErrorDialog(String message) {
     showDialog(
@@ -701,7 +710,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
             ),
           ),
 
-        // Bottom status bar (Faces + Monitoring)
+        // Bottom status bar (Faces + Monitoring + Remaining Captures)
         Positioned(
           left: 0,
           right: 0,
@@ -722,6 +731,12 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                     color: _isDetectionActive
                         ? Colors.green.withValues(alpha: 0.85)
                         : Colors.grey.withValues(alpha: 0.70),
+                  ),
+                  _buildStatusBadge(
+                    label: 'Left: $_remainingCapturesToday',
+                    color: _remainingCapturesToday > 0
+                        ? Colors.blue.withValues(alpha: 0.85)
+                        : Colors.red.withValues(alpha: 0.85),
                   ),
                 ],
               ),

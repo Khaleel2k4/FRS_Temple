@@ -262,7 +262,7 @@ def get_bucket_info():
 # Person Management Endpoints
 @app.route('/api/persons', methods=['POST'])
 def add_person():
-    """Add a new person entry - routes to pass_in or pass_out table based on first-time detection."""
+    """Add a new person entry - allows max 2 captures per day per person (1 pass_in + 1 re_entry)."""
     try:
         data = request.get_json()
         
@@ -278,23 +278,33 @@ def add_person():
         s3_key = data.get('s3_key')
         face_confidence = data.get('face_confidence')
         
-        # Check if person exists in pass_in table
-        person_exists = db_manager.check_person_exists(person_name)
+        # Check person's capture status for today
+        capture_status = db_manager.check_person_exists_today(person_name)
         
-        if person_exists:
-            # Person exists, add to re_entry table
+        if not capture_status['can_capture_today']:
+            # Person has already reached their daily limit (2 captures)
+            return jsonify({
+                "success": False,
+                "error": f"Person '{person_name}' has already been captured 2 times today. Daily limit reached.",
+                "daily_limit_reached": True,
+                "pass_in_count": 1 if capture_status['has_pass_in_today'] else 0,
+                "re_entry_count": capture_status['re_entry_count_today']
+            }), 429  # HTTP 429 Too Many Requests
+        
+        if capture_status['has_pass_in_today'] and capture_status['re_entry_count_today'] == 0:
+            # Person has pass_in today but no re_entry yet - add to re_entry table
             entry_id = db_manager.add_re_entry(
                 person_name=person_name,
                 image_url=image_url,
                 s3_key=s3_key,
-                face_confidence=face_confidence
+                face_confidence=face_confidence,
+                pass_in_entry_id=capture_status['pass_in_id']
             )
             entry_type = "re_entry"
             message = f"Person '{person_name}' re-entry recorded successfully"
-            # Get re-entry count for this person today
-            re_entry_count = db_manager.get_re_entry_count(person_name)
-        else:
-            # First time, add to pass_in table
+            re_entry_count = 1  # This is their first re-entry today
+        elif not capture_status['has_pass_in_today']:
+            # First time today - add to pass_in table
             entry_id = db_manager.add_pass_in_entry(
                 person_name=person_name,
                 image_url=image_url,
@@ -304,6 +314,13 @@ def add_person():
             entry_type = "pass_in"
             message = f"Person '{person_name}' first-time entry recorded successfully"
             re_entry_count = 0
+        else:
+            # This should not happen due to the can_capture_today check, but just in case
+            return jsonify({
+                "success": False,
+                "error": "Unexpected capture state. Please try again.",
+                "capture_status": capture_status
+            }), 500
         
         logger.info(f"Added {entry_type} entry for {person_name} with ID: {entry_id}")
         
@@ -312,7 +329,8 @@ def add_person():
             "message": message,
             "person_id": entry_id,
             "entry_type": entry_type,
-            "re_entry_count": re_entry_count
+            "re_entry_count": re_entry_count,
+            "remaining_captures_today": 1 if entry_type == "pass_in" else 0
         }), 201
         
     except Exception as e:

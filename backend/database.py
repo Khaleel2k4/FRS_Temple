@@ -72,16 +72,45 @@ class PostgreSQLManager:
             logger.error(f"Failed to initialize database: {e}")
             raise
     
-    def check_person_exists(self, person_name: str) -> bool:
-        """Check if a person already exists in pass_in table."""
+    def check_person_exists_today(self, person_name: str) -> Dict[str, Any]:
+        """Check if a person has been captured today and return their capture status."""
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute('SELECT 1 FROM pass_in WHERE person_name = %s LIMIT 1', (person_name,))
-                    return cursor.fetchone() is not None
+                    # Get today's date at midnight
+                    today = datetime.now().date()
+                    
+                    # Check for pass_in entry today
+                    cursor.execute('''
+                        SELECT id FROM pass_in 
+                        WHERE person_name = %s AND DATE(capture_time) = %s
+                        LIMIT 1
+                    ''', (person_name, today))
+                    
+                    pass_in_result = cursor.fetchone()
+                    
+                    # Check for re_entry entry today
+                    cursor.execute('''
+                        SELECT COUNT(*) FROM re_entry 
+                        WHERE person_name = %s AND DATE(capture_time) = %s
+                    ''', (person_name, today))
+                    
+                    re_entry_count = cursor.fetchone()[0]
+                    
+                    return {
+                        'has_pass_in_today': pass_in_result is not None,
+                        'pass_in_id': pass_in_result[0] if pass_in_result else None,
+                        're_entry_count_today': re_entry_count,
+                        'can_capture_today': not (pass_in_result is not None and re_entry_count >= 1)
+                    }
         except Exception as e:
-            logger.error(f"Error checking person exists: {e}")
-            return False
+            logger.error(f"Error checking person exists today: {e}")
+            return {
+                'has_pass_in_today': False,
+                'pass_in_id': None,
+                're_entry_count_today': 0,
+                'can_capture_today': True
+            }
     
     def add_pass_in_entry(self, person_name: str, image_url: str, s3_key: Optional[str] = None, 
                          face_confidence: Optional[float] = None) -> int:

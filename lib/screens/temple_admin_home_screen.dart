@@ -234,115 +234,116 @@ class _DivineTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Container(
-        height: 60,
+        height: 56,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFFFF1C6),
-              Color(0xFFFFD27D),
-              Color(0xFFFFB300),
-            ],
-          ),
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.white.withOpacity(0.92),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFFD27D).withOpacity(0.32),
-              blurRadius: 26,
-              spreadRadius: 0.5,
-              offset: const Offset(0, 14),
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
             BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 20,
-              offset: const Offset(0, 12),
+              color: const Color(0xFFFFD27D).withOpacity(0.24),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
-          border: Border.all(color: Colors.white.withOpacity(0.38), width: 1.0),
         ),
         child: Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 10),
-              child: PopupMenuButton<_AdminMenuItem>(
-                onSelected: onMenuSelected,
-                itemBuilder: (context) {
-                  return [
-                    PopupMenuItem<_AdminMenuItem>(
-                      enabled: false,
-                      value: _AdminMenuItem.profile,
-                      child: Text(
-                        adminName,
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    greeting,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.templeBrown,
+                      letterSpacing: 0.2,
                     ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: _AdminMenuItem.profile,
-                      child: Text('Profile'),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Temple Administration',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      letterSpacing: 0.2,
+                      color: AppTheme.templeBrown,
                     ),
-                    const PopupMenuItem(
-                      value: _AdminMenuItem.notifications,
-                      child: Text('Notifications'),
+                  ),
+                ],
+              ),
+            ),
+            PopupMenuButton<_AdminMenuItem>(
+              onSelected: onMenuSelected,
+              itemBuilder: (context) {
+                return [
+                  PopupMenuItem<_AdminMenuItem>(
+                    enabled: false,
+                    value: _AdminMenuItem.profile,
+                    child: Text(
+                      adminName,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
-                    const PopupMenuItem(
-                      value: _AdminMenuItem.logout,
-                      child: Text('Logout'),
-                    ),
-                  ];
-                },
-                child: Container(
-                  height: 44,
-                  width: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFFFFE9A8),
-                        Color(0xFFFFB300),
-                        Color(0xFFFF8F00),
-                      ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.10),
-                        blurRadius: 14,
-                        offset: const Offset(0, 8),
-                      ),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: _AdminMenuItem.profile,
+                    child: Text('Profile'),
+                  ),
+                  const PopupMenuItem(
+                    value: _AdminMenuItem.notifications,
+                    child: Text('Notifications'),
+                  ),
+                  const PopupMenuItem(
+                    value: _AdminMenuItem.logout,
+                    child: Text('Logout'),
+                  ),
+                ];
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFFFFE9A8),
+                      Color(0xFFFFB300),
+                      Color(0xFFFF8F00),
                     ],
-                    border: Border.all(color: Colors.white.withOpacity(0.45), width: 1.0),
                   ),
-                  child: Icon(
-                    Icons.person_rounded,
-                    color: cs.onPrimary,
-                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.person_rounded,
+                  color: Colors.white,
+                  size: 20,
                 ),
               ),
             ),
-            const Expanded(
-              child: Center(
-                child: Text(
-                  'Temple Administration',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 17,
-                    letterSpacing: 0.2,
-                    color: AppTheme.templeBrown,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 54),
           ],
         ),
       ),
@@ -373,110 +374,345 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     'assets/images/temple_deity.png',
   ];
 
-  late final AnimationController _enter;
-  late final Animation<double> _enterFade;
-  late final Animation<Offset> _enterSlide;
+  static const List<String> _devotionalQuotes = <String>[
+    'Serving Devotees with Devotion 🙏',
+    'Where Faith Meets Peace',
+    'Divine Energy Flows Here',
+    'Experience Spiritual Bliss',
+    'Temple of Faith and Hope',
+  ];
 
-  late final AnimationController _pulse;
+  late final PageController _pageController;
+  late final AnimationController _autoScrollController;
+  late final AnimationController _fadeController;
+  late final AnimationController _gridStagger;
+
+  int _currentPage = 0;
+  Timer? _autoScrollTimer;
 
   @override
   void initState() {
     super.initState();
 
-    _enter = AnimationController(
+    _pageController = PageController();
+    _autoScrollController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1100),
+      duration: const Duration(seconds: 4),
     );
-    _enterFade = CurvedAnimation(parent: _enter, curve: Curves.easeOutCubic);
-    _enterSlide = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _enter, curve: Curves.easeOutCubic));
-
-    _pulse = AnimationController(
+    _fadeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 800),
+    );
+    _gridStagger = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
     );
 
-    Future<void>.delayed(const Duration(milliseconds: 180), () {
-      if (!mounted) return;
-      _enter.forward();
-      _pulse.forward(from: 0);
+    _fadeController.forward();
+    _startAutoScroll();
+
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) _gridStagger.forward();
     });
+  }
+
+  void _startAutoScroll() {
+    _autoScrollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted) return;
+      _nextPage();
+    });
+  }
+
+  void _nextPage() {
+    if (_currentPage < _templeImageAssets.length - 1) {
+      _currentPage++;
+    } else {
+      _currentPage = 0;
+    }
+    _pageController.animateToPage(
+      _currentPage,
+      duration: const Duration(milliseconds: 800),
+      curve: Curves.easeInOutCubic,
+    );
   }
 
   @override
   void dispose() {
-    _enter.dispose();
-    _pulse.dispose();
+    _autoScrollTimer?.cancel();
+    _pageController.dispose();
+    _autoScrollController.dispose();
+    _fadeController.dispose();
+    _gridStagger.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFFFFF1C6),
+            Color(0xFFFFF8E7),
+          ],
+        ),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 88, 16, 104),
+        child: Column(
+          children: [
+            FadeTransition(
+              opacity: widget.greetingFade,
+              child: AnimatedBuilder(
+                animation: widget.greetingFloat,
+                builder: (context, child) {
+                  return Transform.translate(
+                    offset: Offset(0, widget.greetingFloat.value),
+                    child: child,
+                  );
+                },
+                child: _GreetingOverlay(lines: widget.greetingLines),
+              ),
+            ),
+            const SizedBox(height: 20),
+            FadeTransition(
+              opacity: _fadeController,
+              child: _DevotionalCarousel(
+                imageAssets: _templeImageAssets,
+                quotes: _devotionalQuotes,
+                pageController: _pageController,
+                onPageChanged: (index) {
+                  setState(() => _currentPage = index);
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            _PageIndicator(
+              currentPage: _currentPage,
+              pageCount: _templeImageAssets.length,
+            ),
+            const SizedBox(height: 24),
+            const _DevotionalDivider(),
+            const SizedBox(height: 20),
+            _QuickActionsGrid(
+              staggerController: _gridStagger,
+            ),
+            const SizedBox(height: 16),
+            const _DevotionalTagline(),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-    final maxW = (size.width * 0.92).clamp(320.0, 720.0);
-    final cardH = (size.height * 0.46).clamp(260.0, 460.0);
+class _DevotionalCarousel extends StatelessWidget {
+  const _DevotionalCarousel({
+    required this.imageAssets,
+    required this.quotes,
+    required this.pageController,
+    required this.onPageChanged,
+  });
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(0, 0.02),
-                  radius: 1.05,
-                  colors: [
-                    const Color(0xFFFFD27D).withOpacity(0.14),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 1.0],
+  final List<String> imageAssets;
+  final List<String> quotes;
+  final PageController pageController;
+  final ValueChanged<int> onPageChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 240,
+      child: PageView.builder(
+        controller: pageController,
+        onPageChanged: onPageChanged,
+        itemCount: imageAssets.length,
+        itemBuilder: (context, index) {
+          final asset = imageAssets[index];
+          final quote = quotes[index % quotes.length];
+
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
+                BoxShadow(
+                  color: const Color(0xFFFFD27D).withOpacity(0.28),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    asset,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, _, __) => Container(
+                      color: AppTheme.ivory,
+                      child: const Center(
+                        child: Icon(
+                          Icons.account_balance_rounded,
+                          size: 64,
+                          color: AppTheme.sandalwood,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.6),
+                          ],
+                          stops: const [0.4, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 24,
+                    left: 20,
+                    right: 20,
+                    child: Column(
+                      children: [
+                        Text(
+                          quote,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                            height: 1.3,
+                            shadows: [
+                              Shadow(color: Colors.black54, blurRadius: 8),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFD27D).withOpacity(0.24),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: const Text(
+                            'Live Temple View',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PageIndicator extends StatelessWidget {
+  const _PageIndicator({
+    required this.currentPage,
+    required this.pageCount,
+  });
+
+  final int currentPage;
+  final int pageCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        pageCount,
+        (index) => AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          width: currentPage == index ? 24 : 8,
+          height: 8,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            gradient: currentPage == index
+                ? const LinearGradient(
+                    colors: [Color(0xFFFFD27D), Color(0xFFFF8F00)],
+                  )
+                : null,
+            color: currentPage == index
+                ? null
+                : AppTheme.sandalwood.withOpacity(0.3),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DevotionalDivider extends StatelessWidget {
+  const _DevotionalDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  const Color(0xFFFFD27D).withOpacity(0.4),
+                ],
               ),
             ),
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 88, 16, 104),
-          child: Column(
-            children: [
-              Center(
-                child: FadeTransition(
-                  opacity: widget.greetingFade,
-                  child: AnimatedBuilder(
-                    animation: widget.greetingFloat,
-                    builder: (context, child) {
-                      return Transform.translate(
-                        offset: Offset(0, widget.greetingFloat.value),
-                        child: child,
-                      );
-                    },
-                    child: _GreetingOverlay(lines: widget.greetingLines),
-                  ),
-                ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: const Text(
+            '🙏',
+            style: TextStyle(fontSize: 20),
+          ),
+        ),
+        Expanded(
+          child: Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFFFFD27D).withOpacity(0.4),
+                  Colors.transparent,
+                ],
               ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: FadeTransition(
-                  opacity: _enterFade,
-                  child: SlideTransition(
-                    position: _enterSlide,
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: maxW),
-                        child: SizedBox(
-                          height: cardH,
-                          child: _TempleImageShowcase(
-                            imageAssets: _templeImageAssets,
-                            pulse: _pulse,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ],
@@ -484,234 +720,88 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   }
 }
 
-class _TempleImageShowcase extends StatefulWidget {
-  const _TempleImageShowcase({
-    required this.imageAssets,
-    required this.pulse,
+class _QuickActionsGrid extends StatelessWidget {
+  const _QuickActionsGrid({
+    required this.staggerController,
   });
 
-  final List<String> imageAssets;
-  final AnimationController pulse;
+  final AnimationController staggerController;
 
-  @override
-  State<_TempleImageShowcase> createState() => _TempleImageShowcaseState();
-}
-
-class _TempleImageShowcaseState extends State<_TempleImageShowcase>
-    with TickerProviderStateMixin {
-  static const Duration _transitionDuration = Duration(seconds: 10);
-  static const Duration _autoAdvanceEvery = Duration(seconds: 10);
-
-  late final AnimationController _transition;
-
-  Timer? _autoAdvance;
-
-  int _index = 0;
-  bool _busy = false;
-  int _direction = 1;
-
-  final Map<String, double> _aspectRatioCache = <String, double>{};
-
-  @override
-  void initState() {
-    super.initState();
-    _transition = AnimationController(vsync: this, duration: _transitionDuration);
-
-    _startOrResetAutoAdvance();
-  }
-
-  @override
-  void dispose() {
-    _autoAdvance?.cancel();
-    _transition.dispose();
-    super.dispose();
-  }
-
-  int _wrap(int i) {
-    final n = widget.imageAssets.length;
-    if (n == 0) return 0;
-    return (i % n + n) % n;
-  }
-
-  void _startOrResetAutoAdvance() {
-    _autoAdvance?.cancel();
-    _autoAdvance = Timer.periodic(_autoAdvanceEvery, (_) {
-      if (!mounted) return;
-      _next();
-    });
-  }
-
-  Future<double?> _resolveAspectRatio(String asset) async {
-    final cached = _aspectRatioCache[asset];
-    if (cached != null) return cached;
-
-    final completer = Completer<ImageInfo>();
-    final stream = AssetImage(asset).resolve(const ImageConfiguration());
-    late final ImageStreamListener listener;
-    listener = ImageStreamListener(
-      (info, _) {
-        if (!completer.isCompleted) completer.complete(info);
-        stream.removeListener(listener);
-      },
-      onError: (_, __) {
-        if (!completer.isCompleted) completer.completeError('error');
-        stream.removeListener(listener);
-      },
-    );
-    stream.addListener(listener);
-
-    try {
-      final info = await completer.future;
-      final ratio = info.image.width / info.image.height;
-      _aspectRatioCache[asset] = ratio;
-      return ratio;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _next() async {
-    if (_busy) return;
-    if (widget.imageAssets.isEmpty) return;
-
-    setState(() => _busy = true);
-    _direction = 1;
-    _startOrResetAutoAdvance();
-    await _transition.forward(from: 0);
-    if (!mounted) return;
-    setState(() {
-      _index = _wrap(_index + 1);
-      _busy = false;
-    });
-    widget.pulse.forward(from: 0);
-  }
-
-  Future<void> _previous() async {
-    if (_busy) return;
-    if (widget.imageAssets.isEmpty) return;
-
-    setState(() => _busy = true);
-    _direction = -1;
-    _startOrResetAutoAdvance();
-    await _transition.forward(from: 0);
-    if (!mounted) return;
-    setState(() {
-      _index = _wrap(_index - 1);
-      _busy = false;
-    });
-    widget.pulse.forward(from: 0);
-  }
+  static const List<Map<String, dynamic>> _actions = [
+    {
+      'icon': Icons.people_alt_rounded,
+      'label': 'View Data',
+      'color': Color(0xFFFF8F00),
+    },
+    {
+      'icon': Icons.camera_alt_rounded,
+      'label': 'Camera Monitoring',
+      'color': Color(0xFFFF6F00),
+    },
+    {
+      'icon': Icons.analytics_rounded,
+      'label': 'Analytics',
+      'color': Color(0xFFFFA726),
+    },
+    {
+      'icon': Icons.settings_rounded,
+      'label': 'Settings',
+      'color': Color(0xFFFFB74D),
+    },
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final hasImages = widget.imageAssets.isNotEmpty;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = 12.0;
+        final cardW = (constraints.maxWidth - spacing * 3) / 2;
+        final cardH = cardW * 0.85;
 
-    final frontAsset = hasImages ? widget.imageAssets[_wrap(_index)] : null;
-    final midAsset = hasImages ? widget.imageAssets[_wrap(_index + 1)] : null;
-    final backAsset = hasImages ? widget.imageAssets[_wrap(_index + 2)] : null;
-
-    return AnimatedBuilder(
-      animation: Listenable.merge([_transition, widget.pulse]),
-      builder: (context, _) {
-        final t = Curves.easeInOutCubic.transform(_transition.value);
-        final pulseT = Curves.easeOutCubic.transform(widget.pulse.value);
-        final pulse = 1.0 + (1 - pulseT) * 0.015;
-
-        final dir = _direction.toDouble().clamp(-1.0, 1.0);
-
-        final frontX = lerpDouble(0, -74 * dir, t) ?? 0;
-        final frontY = lerpDouble(0, -18, t) ?? 0;
-        final frontScale = lerpDouble(1.0, 0.94, t) ?? 1.0;
-        final frontOpacity = lerpDouble(1.0, 0.0, t) ?? 1.0;
-        final frontShadow = lerpDouble(1.0, 0.0, t) ?? 1.0;
-
-        final midX = lerpDouble(14 * dir, 0, t) ?? 0;
-        final midY = lerpDouble(18, 0, t) ?? 0;
-        final midScale = lerpDouble(0.92, 1.0, t) ?? 1.0;
-        final midRot = lerpDouble(-0.03, 0.0, t) ?? 0.0;
-        final midShadow = lerpDouble(0.75, 1.0, t) ?? 1.0;
-
-        final backX = lerpDouble(26 * dir, 14 * dir, t) ?? 0;
-        final backY = lerpDouble(32, 18, t) ?? 0;
-        final backScale = lerpDouble(0.86, 0.92, t) ?? 1.0;
-        final backRot = lerpDouble(0.04, -0.03, t) ?? 0.0;
-        final backOpacity = lerpDouble(0.70, 0.86, t) ?? 1.0;
-        final backShadow = lerpDouble(0.45, 0.75, t) ?? 1.0;
-
-        return Stack(
-          alignment: Alignment.center,
+        return Column(
           children: [
-            Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: const Alignment(0, -0.10),
-                      radius: 0.95,
-                      colors: [
-                        const Color(0xFFFFD27D).withOpacity(0.18),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 1.0],
-                    ),
+            Row(
+              children: [
+                Expanded(
+                  child: _AnimatedActionCard(
+                    action: _actions[0],
+                    staggerController: staggerController,
+                    index: 0,
+                    minHeight: cardH,
                   ),
                 ),
-              ),
-            ),
-            _StackCard(
-              opacity: backOpacity,
-              translateX: backX,
-              translateY: backY,
-              scale: backScale,
-              rotation: backRot,
-              shadowStrength: backShadow,
-              child: _DivineImageCard(
-                label: 'Temple Image',
-                asset: backAsset,
-                resolveAspectRatio: _resolveAspectRatio,
-                tint: cs.surface,
-              ),
-            ),
-            _StackCard(
-              opacity: 0.92,
-              translateX: midX,
-              translateY: midY,
-              scale: midScale,
-              rotation: midRot,
-              shadowStrength: midShadow,
-              child: _DivineImageCard(
-                label: 'Temple Image',
-                asset: midAsset,
-                resolveAspectRatio: _resolveAspectRatio,
-                tint: cs.surface,
-              ),
-            ),
-            _StackCard(
-              opacity: frontOpacity,
-              translateX: frontX,
-              translateY: frontY,
-              scale: frontScale * pulse,
-              rotation: 0.0,
-              shadowStrength: frontShadow,
-              child: GestureDetector(
-                onTap: _next,
-                onHorizontalDragEnd: (details) {
-                  if (details.primaryVelocity == null) return;
-                  if (details.primaryVelocity! < -60) {
-                    _next();
-                  } else if (details.primaryVelocity! > 60) {
-                    _previous();
-                  }
-                },
-                child: _DivineImageCard(
-                  label: 'Temple Image',
-                  asset: frontAsset,
-                  resolveAspectRatio: _resolveAspectRatio,
-                  tint: cs.surface,
-                  emphasize: true,
+                SizedBox(width: spacing),
+                Expanded(
+                  child: _AnimatedActionCard(
+                    action: _actions[1],
+                    staggerController: staggerController,
+                    index: 1,
+                    minHeight: cardH,
+                  ),
                 ),
-              ),
+              ],
+            ),
+            SizedBox(height: spacing),
+            Row(
+              children: [
+                Expanded(
+                  child: _AnimatedActionCard(
+                    action: _actions[2],
+                    staggerController: staggerController,
+                    index: 2,
+                    minHeight: cardH,
+                  ),
+                ),
+                SizedBox(width: spacing),
+                Expanded(
+                  child: _AnimatedActionCard(
+                    action: _actions[3],
+                    staggerController: staggerController,
+                    index: 3,
+                    minHeight: cardH,
+                  ),
+                ),
+              ],
             ),
           ],
         );
@@ -720,171 +810,160 @@ class _TempleImageShowcaseState extends State<_TempleImageShowcase>
   }
 }
 
-class _StackCard extends StatelessWidget {
-  const _StackCard({
-    required this.child,
-    required this.opacity,
-    this.translateX = 0,
-    required this.translateY,
-    required this.scale,
-    required this.rotation,
-    required this.shadowStrength,
+class _AnimatedActionCard extends StatefulWidget {
+  const _AnimatedActionCard({
+    required this.action,
+    required this.staggerController,
+    required this.index,
+    required this.minHeight,
   });
 
-  final Widget child;
-  final double opacity;
-  final double translateX;
-  final double translateY;
-  final double scale;
-  final double rotation;
-  final double shadowStrength;
+  final Map<String, dynamic> action;
+  final AnimationController staggerController;
+  final int index;
+  final double minHeight;
+
+  @override
+  State<_AnimatedActionCard> createState() => _AnimatedActionCardState();
+}
+
+class _AnimatedActionCardState extends State<_AnimatedActionCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _tapController;
+  late final Animation<double> _scale;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _tapController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 120),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.96).animate(
+      CurvedAnimation(parent: _tapController, curve: Curves.easeOutCubic),
+    );
+    _slide = Tween<Offset>(
+      begin: Offset(0, 0.08 + (widget.index % 2) * 0.04),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: widget.staggerController,
+        curve: Interval(
+          0.2 + widget.index * 0.12,
+          0.6 + widget.index * 0.12,
+          curve: Curves.easeOutCubic,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _tapController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      ignoring: opacity < 0.95,
-      child: Opacity(
-        opacity: opacity.clamp(0.0, 1.0),
-        child: Transform.translate(
-          offset: Offset(translateX, translateY),
-          child: Transform.rotate(
-            angle: rotation,
-            child: Transform.scale(
-              scale: scale,
-              child: _ShadowStrength(
-                strength: shadowStrength,
-                child: child,
+    return SlideTransition(
+      position: _slide,
+      child: AnimatedBuilder(
+        animation: _scale,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scale.value,
+            child: GestureDetector(
+              onTapDown: (_) => _tapController.forward(),
+              onTapUp: (_) {
+                _tapController.reverse();
+              },
+              onTapCancel: () => _tapController.reverse(),
+              child: Container(
+                constraints: BoxConstraints(minHeight: widget.minHeight),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFFFFD27D).withOpacity(0.24),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF8E7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          widget.action['icon'],
+                          size: 28,
+                          color: widget.action['color'],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        widget.action['label'],
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.templeBrown,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 }
 
-class _ShadowStrength extends InheritedWidget {
-  const _ShadowStrength({required this.strength, required super.child});
-
-  final double strength;
-
-  static double of(BuildContext context) {
-    return context.dependOnInheritedWidgetOfExactType<_ShadowStrength>()?.strength ??
-        1.0;
-  }
-
-  @override
-  bool updateShouldNotify(covariant _ShadowStrength oldWidget) {
-    return oldWidget.strength != strength;
-  }
-}
-
-class _DivineImageCard extends StatelessWidget {
-  const _DivineImageCard({
-    required this.label,
-    required this.asset,
-    required this.resolveAspectRatio,
-    required this.tint,
-    this.emphasize = false,
-  });
-
-  final String label;
-  final String? asset;
-  final Future<double?> Function(String asset) resolveAspectRatio;
-  final Color tint;
-  final bool emphasize;
+class _DevotionalTagline extends StatelessWidget {
+  const _DevotionalTagline();
 
   @override
   Widget build(BuildContext context) {
-    final strength = _ShadowStrength.of(context);
-    const border = Color(0xFFFFD27D);
-    const bg = Color(0xFFFFF8E7);
-
-    final outerShadowOpacity = (0.18 * strength).clamp(0.06, 0.22);
-    final goldShadowOpacity = (0.40 * strength).clamp(0.10, 0.46);
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 520),
-      curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        color: bg.withOpacity(0.78),
-        border: Border.all(
-          color: border.withOpacity(emphasize ? 0.92 : 0.62),
-          width: emphasize ? 1.8 : 1.2,
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFFFD27D).withOpacity(0.1),
+            const Color(0xFFFFF8E7).withOpacity(0.1),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(outerShadowOpacity),
-            blurRadius: 30,
-            offset: const Offset(0, 18),
-          ),
-          BoxShadow(
-            color: border.withOpacity(goldShadowOpacity),
-            blurRadius: emphasize ? 44 : 34,
-            spreadRadius: emphasize ? 1.2 : 0.6,
-            offset: const Offset(0, 18),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFFFD27D).withOpacity(0.2),
+          width: 1,
+        ),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Column(
-            children: [
-              Expanded(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: tint.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.45),
-                      width: 1,
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: asset == null
-                        ? const _TempleImagePlaceholder()
-                        : FutureBuilder<double?>(
-                            future: resolveAspectRatio(asset!),
-                            builder: (context, snapshot) {
-                              final ratio = snapshot.data;
-                              final ar = (ratio == null || ratio.isNaN || ratio <= 0)
-                                  ? 3 / 4
-                                  : ratio;
-
-                              return Center(
-                                child: AspectRatio(
-                                  aspectRatio: ar,
-                                  child: Image.asset(
-                                    asset!,
-                                    fit: BoxFit.contain,
-                                    filterQuality: FilterQuality.high,
-                                    errorBuilder: (context, _, __) {
-                                      return const _TempleImagePlaceholder();
-                                    },
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.2,
-                      color: AppTheme.templeBrown.withOpacity(0.86),
-                    ),
-              ),
-            ],
-          ),
+      child: Text(
+        '✨ "Where Devotion Meets Technology"',
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: AppTheme.templeBrown,
+          letterSpacing: 0.2,
         ),
       ),
     );

@@ -201,32 +201,6 @@ class _ViewDataScreenState extends State<ViewDataScreen> {
         final List<dynamic> persons = result['persons'] ?? [];
         developer.log('Fetched ${persons.length} records from backend');
         
-        // If no real data, add some test data with working images
-        if (persons.isEmpty) {
-          developer.log('No real data found, adding test images');
-          final testPersons = [
-            {
-              'id': 1,
-              'person_name': 'Test Person 1',
-              'image_url': 'https://picsum.photos/200/200?random=1',
-              'capture_time': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-            },
-            {
-              'id': 2,
-              'person_name': 'Test Person 2',
-              'image_url': 'https://picsum.photos/200/200?random=2',
-              'capture_time': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
-            },
-            {
-              'id': 3,
-              'person_name': 'Test Person 3',
-              'image_url': 'https://picsum.photos/200/200?random=3',
-              'capture_time': DateTime.now().subtract(const Duration(hours: 3)).toIso8601String(),
-            },
-          ];
-          persons.addAll(testPersons);
-        }
-        
         // Show complete raw data structure for debugging
         if (persons.isNotEmpty) {
           developer.log('=== COMPLETE RAW DATA STRUCTURE ===');
@@ -307,47 +281,75 @@ class _ViewDataScreenState extends State<ViewDataScreen> {
           
           developer.log('Final image URL for person ${person['id'] ?? 'unknown'}: "$imageUrl"');
           
-          // If we still don't have an image URL or it's broken, use a working test image
-          if (imageUrl.isEmpty || 
-              imageUrl.contains('broken') || 
-              imageUrl.contains('placeholder') ||
-              imageUrl.length < 10) { // Check for invalid URLs
-            // Use a reliable test image to verify the layout works
-            imageUrl = 'https://picsum.photos/200/200?random=${person['id'] ?? DateTime.now().millisecondsSinceEpoch}';
-            developer.log('Using fallback test image: $imageUrl');
-          }
+          // Only include records that have valid image URLs
+          bool isValidUrl = imageUrl.isNotEmpty && 
+                           imageUrl.length >= 20 && // Increased minimum length
+                           !imageUrl.contains('placeholder') &&
+                           !imageUrl.contains('test') &&
+                           !imageUrl.contains('picsum') &&
+                           !imageUrl.contains('via.placeholder') &&
+                           !imageUrl.contains('broken') &&
+                           imageUrl.startsWith('http') &&
+                           (imageUrl.contains('s3') || imageUrl.contains('amazonaws.com'));
           
-          // Additional validation - ensure URL is accessible
-          if (imageUrl.startsWith('http') && !imageUrl.contains('picsum')) {
-            // For non-test URLs, add a fallback if they might fail
-            developer.log('Validating URL: $imageUrl');
-            // We'll let Image.network handle the validation with errorBuilder
-          }
-          
-          // Handle multiple possible date field names and formats
-          String? dateStr = person['capture_time'] ?? person['created_at'] ?? person['date'] ?? person['timestamp'];
-          DateTime dateTime;
-          
-          if (dateStr == null || dateStr.isEmpty) {
-            developer.log('No date found, using current time');
-            dateTime = DateTime.now();
-          } else {
-            try {
-              // Try parsing as ISO format first
-              dateTime = DateTime.parse(dateStr);
-            } catch (e) {
-              developer.log('Failed to parse date "$dateStr": $e');
+          if (isValidUrl) {
+            developer.log('=== VALIDATING IMAGE URL ===');
+            developer.log('Person ID: ${person['id']}');
+            developer.log('Image URL: "$imageUrl"');
+            developer.log('URL Length: ${imageUrl.length}');
+            developer.log('Starts with http: ${imageUrl.startsWith('http')}');
+            developer.log('Contains s3: ${imageUrl.contains('s3')}');
+            developer.log('============================');
+            
+            // Handle multiple possible date field names and formats
+            String? dateStr = person['capture_time'] ?? person['created_at'] ?? person['date'] ?? person['timestamp'];
+            DateTime dateTime;
+            
+            if (dateStr == null || dateStr.isEmpty) {
+              developer.log('No date found, using current time');
               dateTime = DateTime.now();
+            } else {
+              try {
+                // Try parsing as ISO format first
+                dateTime = DateTime.parse(dateStr);
+              } catch (e) {
+                developer.log('Failed to parse date "$dateStr": $e');
+                dateTime = DateTime.now();
+              }
             }
+            
+            records.add(_DetectionRecord(
+              detectionId: person['id']?.toString() ?? 'DET-${person['id'] ?? '0000'}',
+              camera: person['person_name'] ?? person['name'] ?? 'Unknown',
+              imageAsset: imageUrl, // Use the actual S3 URL
+              dateTime: dateTime,
+              count: 1, // Each record represents one detection
+            ));
+          } else {
+            developer.log('=== SKIPPING INVALID RECORD ===');
+            developer.log('Person ID: ${person['id']}');
+            developer.log('Image URL: "$imageUrl"');
+            if (imageUrl.isEmpty) {
+              developer.log('Reason: Empty URL');
+            } else if (imageUrl.length < 20) {
+              developer.log('Reason: Too short (min 20 chars)');
+            } else if (imageUrl.contains('placeholder')) {
+              developer.log('Reason: Contains placeholder');
+            } else if (imageUrl.contains('test')) {
+              developer.log('Reason: Contains test');
+            } else if (imageUrl.contains('picsum')) {
+              developer.log('Reason: Contains picsum');
+            } else if (imageUrl.contains('via.placeholder')) {
+              developer.log('Reason: Contains via.placeholder');
+            } else if (imageUrl.contains('broken')) {
+              developer.log('Reason: Contains broken');
+            } else if (!imageUrl.startsWith('http')) {
+              developer.log('Reason: Does not start with http');
+            } else if (!imageUrl.contains('s3') && !imageUrl.contains('amazonaws.com')) {
+              developer.log('Reason: Not an S3 URL');
+            }
+            developer.log('============================');
           }
-          
-          records.add(_DetectionRecord(
-            detectionId: person['id']?.toString() ?? 'DET-${person['id'] ?? '0000'}',
-            camera: person['person_name'] ?? person['name'] ?? 'Unknown',
-            imageAsset: imageUrl, // Use the actual S3 URL
-            dateTime: dateTime,
-            count: 1, // Each record represents one detection
-          ));
         }
         
         developer.log('Processed ${records.length} records');
@@ -891,6 +893,67 @@ class _ImageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // If no image URL, show empty placeholder
+    if (record.imageAsset.isEmpty) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.grey[200],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Container(
+                color: Colors.grey[200],
+                child: const Icon(
+                  Icons.image_not_supported,
+                  color: Colors.grey,
+                  size: 32,
+                ),
+              ),
+              // Timestamp overlay at bottom
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.7),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                  child: Text(
+                    _formatTimeShort(record.dateTime),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: onTapImage,
       child: Container(
@@ -1218,25 +1281,33 @@ Widget _buildImage(String imagePath, {double? height, double? width, BoxFit? fit
         developer.log('URL that failed: $imagePath');
         developer.log('==========================');
         
-        // Return a working test image instead of broken image icon
-        return Image.network(
-          'https://picsum.photos/200/200?fallback=${DateTime.now().millisecondsSinceEpoch}',
+        // Show broken image icon for real images that fail
+        return Container(
           height: height,
           width: width,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            // If even the fallback fails, show placeholder
-            return Container(
-              height: height,
-              width: width,
-              color: Colors.grey[300],
-              child: Icon(
+          color: Colors.grey[300],
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
                 Icons.broken_image,
                 color: Colors.grey[600],
                 size: (height ?? 74) * 0.4,
               ),
-            );
-          },
+              if (height != null && height > 50)
+                Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: Text(
+                    'Image unavailable',
+                    style: TextStyle(
+                      fontSize: 8,
+                      color: Colors.grey[600],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+            ],
+          ),
         );
       },
       loadingBuilder: (context, child, loadingProgress) {

@@ -449,10 +449,15 @@ class _ViewDataScreenState extends State<ViewDataScreen> {
                       )
                     : _filteredRecords.isEmpty
                         ? const _EmptyState()
-                        : ListView.separated(
+                        : GridView.builder(
                             controller: _scrollController,
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                              childAspectRatio: 1.0,
+                            ),
                             itemCount: _visibleRecords.length + 1,
-                            separatorBuilder: (_, __) => const SizedBox(height: 10),
                             itemBuilder: (context, index) {
                               if (index == _visibleRecords.length) {
                                 final hasMore =
@@ -474,7 +479,7 @@ class _ViewDataScreenState extends State<ViewDataScreen> {
                         );
                       }
 
-                      return _DetectionRecordCard(
+                      return _ImageCard(
                         record: _visibleRecords[index],
                         onTapImage: () => _showImagePreview(
                           context,
@@ -809,6 +814,77 @@ class _FieldButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ImageCard extends StatelessWidget {
+  const _ImageCard({required this.record, required this.onTapImage});
+
+  final _DetectionRecord record;
+  final VoidCallback onTapImage;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTapImage,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildImage(record.imageAsset, fit: BoxFit.cover),
+              // Timestamp overlay at bottom
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.7),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                  child: Text(
+                    _formatTimeShort(record.dateTime),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _formatTimeShort(DateTime dateTime) {
+  final hour = dateTime.hour % 12 == 0 ? 12 : dateTime.hour % 12;
+  final hh = hour.toString().padLeft(2, '0');
+  final mm = dateTime.minute.toString().padLeft(2, '0');
+  final ampm = dateTime.hour >= 12 ? 'PM' : 'AM';
+  return '$hh:$mm $ampm';
 }
 
 class _DetectionRecordCard extends StatelessWidget {

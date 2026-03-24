@@ -43,6 +43,9 @@ dependencies:
   
   # HTTP client for backend communication
   http: ^1.1.0
+  
+  # Shared preferences for settings persistence
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:

@@ -370,9 +370,18 @@ class _FilterBar extends StatelessWidget {
                   DropdownButtonFormField<String>(
                     value: selectedCamera,
                     isDense: true,
+                    isExpanded: true,
+                    hint: const Text('Select Camera'),
                     items: [
                       for (final c in cameras)
-                        DropdownMenuItem(value: c, child: Text(c)),
+                        DropdownMenuItem(
+                          value: c,
+                          child: Text(
+                            c,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
                     ],
                     onChanged: (v) {
                       if (v == null) return;
